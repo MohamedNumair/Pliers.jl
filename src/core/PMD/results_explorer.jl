@@ -352,6 +352,7 @@ function plot_voltage_profile(eng_res; size = (800, 1000))
 
     f = Figure(size = size)
     colors = [:red, :green, :blue, :black]
+    axs = []
     for (i, color) in enumerate(colors)
         ax = Axis(f[i,1])
         bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res,Distances, string(i))
@@ -363,8 +364,14 @@ function plot_voltage_profile(eng_res; size = (800, 1000))
 
         ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(i)]) the network"  
         ax.xlabel = "Distance (m)"
-        ax.ylabel = "Voltage (V)"
+        ax.ylabel = "Voltage (V)"    
+        push!(axs, ax)
     end
+
+    linkxaxes!(axs...)
+    pop!(axs)
+    display(axs)
+    linkyaxes!(axs...)
     return f
 end
 
@@ -392,6 +399,57 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false
    # axb = PolarAxis(f[3, 1], title = "thetalimits", thetalimits = (-2pi/3 - pi/div , -2pi/3 + pi/div))
    # axc = PolarAxis(f[4, 1], title = "thetalimits", thetalimits = (2pi/3 - pi/div , 2pi/3 + pi/div))
    axN = PolarAxis(f[2, 1], title = "Neutral Phasor")
+
+    bus = eng["bus"][bus_id]
+    for (i, color) in enumerate(colors)
+        
+        if haskey(bus["V"], string(i))
+            V = bus["V"][string(i)]
+            V = bus["V"][string(i)]
+            Vm = abs(V)*vbase_V
+            θ = angle(V)
+            lines!(ax, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
+            # lines!(axa, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
+            # lines!(axb, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
+            # lines!(axc, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
+            if i == 4
+                  lines!(axN, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid) 
+            end 
+        
+        else
+            V = 0
+            Vm = 0
+            θ = 0
+        end
+
+    end
+
+    return f 
+end
+
+
+function bus_phasor!(eng::Dict{String, Any}, bus_id::String, f; keep_pu::Bool= false, makie_backend=WGLMakie,
+    )
+    vbase_V = eng["bases"]["vbase_V"]
+    
+    # V = bus["V"]*vbase_V
+    # Vm = abs.(V)
+    # θ = rad2deg.(angle.(V)) 
+
+    makie_backend.activate!()
+
+    #f = Figure(size=(800, 1200))
+
+    colors = [:red, :green, :blue, :black]
+
+    ax = f[1,1]
+    axN = f[2, 1]
+    #ax = PolarAxis(f[1,1], title = "Bus $bus_id Phasors", thetaticks = Makie.AngularTicks(180 / pi, "°"))
+    div = 50
+   # axa = PolarAxis(f[2, 1], title = "thetalimits", thetalimits = (-pi/div, pi/div))
+   # axb = PolarAxis(f[3, 1], title = "thetalimits", thetalimits = (-2pi/3 - pi/div , -2pi/3 + pi/div))
+   # axc = PolarAxis(f[4, 1], title = "thetalimits", thetalimits = (2pi/3 - pi/div , 2pi/3 + pi/div))
+   #axN = PolarAxis(f[2, 1], title = "Neutral Phasor")
 
     bus = eng["bus"][bus_id]
     for (i, color) in enumerate(colors)
