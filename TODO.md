@@ -19,9 +19,10 @@
   - [ ] INVESTIGATE WHY THE LOAD CURRENTS DO NOT MATCH OPENDSS ALTHOUGH VOLTAGES DO -- SEEMS TO BE A BUG
   - [ ] explore SIMULATION RESULTS model details
   - [ ] filter elements SIMULATION RESULTS model details with a specific rule
-  - [ ] plot a tree of a PMD SIMULATION RESULTS Model with results on top of the graph
-  - [ ] plot a real graph if file has coordinates with results on top of the graph
-  - [ ] add all test feeders as JLD2
+  - [x] plot a tree of a PMD SIMULATION RESULTS Model with results on top of the graph
+  - [ ] if Buchheim assumption fails, then try to split the tree ?!?????????
+  - [x] plot a real graph if file has coordinates with results on top of the graph
+  - [x] add all test feeders as JLD2
 
 
 # General Features:

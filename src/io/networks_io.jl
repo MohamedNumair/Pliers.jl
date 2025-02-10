@@ -32,6 +32,9 @@ function load_enwl_model(ntw::Int, fdr::Int, type::String)
     # Create a map to map the type to folder_name
     if type == "original dataset"
         return load(joinpath(BASE_DIR,"test/data/OG-ENWL/Ntw_$(ntw)_Fdr_$(fdr).jld2"))
+
+    elseif type == "1ph"
+        return load(joinpath(BASE_DIR,"test/data/ENWL1ph/Ntw_$(ntw)_Fdr_$(fdr).jld2"))
     else 
 
     folder_name_map = Dict(
