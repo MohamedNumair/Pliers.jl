@@ -15,7 +15,7 @@ using PrettyTables
 using Makie
 using CairoMakie
 using WGLMakie
-using GLMakie
+# using GLMakie
 using GraphMakie
 using GeoMakie
 using Proj
@@ -57,7 +57,7 @@ const _PT = PrettyTables
 const _MK = Makie
 const _CMK = CairoMakie
 const _WGLMK = WGLMakie
-const _GLMK = GLMakie
+# const _GLMK = GLMakie
 
 # https://github.com/PumasAI/SummaryTables.jl?  # SummaryTable.jl is amazing in outputting tables right away
 
