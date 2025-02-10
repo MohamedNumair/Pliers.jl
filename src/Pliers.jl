@@ -86,12 +86,15 @@ include("io/util-enwl-networks.jl")
 include("io/util-spanish-networks.jl")
 
 #PMD
-include("core/PMD/pmd-related-utils.jl")
+include("core/PMD/pmd_utils.jl")
 include("core/PMD/network_graph.jl")
 include("core/PMD/results_explorer.jl")
 include("core/PMD/eng_explorer.jl")
 include("core/PMD/math_explorer.jl")
 include("core/PMD/network_plotting.jl")
+
+#PMDSE
+include("core/PMDSE/pmdse_utils.jl")
 
 
 end # module Pliers
