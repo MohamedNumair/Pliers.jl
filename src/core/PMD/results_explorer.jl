@@ -19,7 +19,8 @@ end
 function pf_results(eng::Dict{String, Any}; max_iter = 5000,kwargs...)
 
     is_explicit_netrual = length(eng["conductor_ids"]) > 3 ? true :  false
-    math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual)
+
+    eng["data_model"] == PMD.MATHEMATICAL ? math = eng : eng["data_model"] == PMD.ENGINEERING ? math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("Data model not supported, make sure it is either ENGINEERING or MATHEMATICAL data model")
     
     add_start_vrvi!(math)
     PF = compute_mc_pf(math; explicit_neutral=is_explicit_netrual, max_iter=max_iter)
