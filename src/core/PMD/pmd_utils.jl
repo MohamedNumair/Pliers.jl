@@ -56,3 +56,50 @@ function _is_eng(graph::MetaDiGraph)
     end
     error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
 end
+
+
+
+
+### Operation on Results Dictionary ###
+"""
+    fluff_bus_voltages(PF_Res::Dict{String, Any})
+
+This function is used to get all possible voltage forms from the output of the OPF voltage variables, so it processes the bus voltages in the given Power Flow Results dictionary `PF_Res`. For each bus in `PF_Res["bus"]`, it checks if the bus has real (`vr`) and imaginary (`vi`) voltage components. If both components are present, it calculates the complex voltage `V`, the voltage magnitude `vm`, and the voltage angle `va` for the bus. A warning is issued indicating that only `vr` and `vi` can be processed.
+
+# Arguments
+- `PF_Res::Dict{String, Any}`: A dictionary containing the Power Flow Results, including bus voltage information.
+
+# Modifies
+- Adds the following keys to each bus dictionary if `vr` and `vi` are present:
+  - `V`: The complex voltage calculated as `vr + vi*im`.
+  - `vm`: The magnitude of the complex voltage.
+  - `va`: The angle of the complex voltage.
+
+"""
+function fluff_bus_voltages!(PF_Res::Dict{String, Any})
+    
+    for (_, bus) in PF_Res["solution"]["bus"]
+        if  haskey(bus, "vr") && haskey(bus, "vi") 
+            bus["V"] = bus["vr"] .+ bus["vi"]*im
+            bus["vm"] = abs.(bus["V"])
+            bus["va"] = angle.(bus["V"])
+        else
+            warning_text("Can't fluff $(keys(bus)). Now I can just fluff the `vr` and `vi`")
+        end 
+    end
+
+end 
+
+
+function dictify_voltages!(PF_res::Dict{String, Any}, math)
+    
+    fluff_bus_voltages!(PF_res)
+    pf_sol = PF_res["solution"]
+
+    for (b, bus) in pf_sol["bus"]
+        terminals = math["bus"][b]["terminals"]
+        # write a dictionary where the key is the terminal number and the value is the voltage at that terminal
+        bus["term"] = Dict(string(term) => bus["V"][i] for (i, term) in enumerate(terminals))
+    end 
+
+end

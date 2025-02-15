@@ -218,6 +218,83 @@ end
 
 
 
+function network_graph_plot!(
+    ax::Axis,
+    network_graph::MetaDiGraph;
+
+    # figure
+    makie_backend=WGLMakie,
+    layout=GraphMakie.Buchheim(),
+    figure_size=(1000, 1200), #resolution
+    
+    #nodes
+    nlabels = nothing,
+    ilabels = nothing,
+    node_color = :black,
+    node_size=automatic,
+    node_marker=automatic,
+    node_strokewidth=automatic,
+    show_node_labels=false, #nlablels
+    
+    #edges
+    elabels = nothing,
+    show_edge_labels=false, #elabels
+    edge_color= :black,
+    elabels_color = :black,
+    #elabels_fontsize =  nothing,
+    tangents =((0,-1),(0,-1)),
+
+    # arrow
+    arrow_show=false,
+    arrow_marker='➤',
+    arrow_size=12,
+    arrow_shift=0.5,    
+    kwargs...
+
+    )
+
+#makie_backend.activate!()
+#labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
+#elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
+
+    add_graph =  graphplot!(
+    ax,
+    network_graph;
+    layout=layout,
+    resolution=figure_size,
+
+    #nodes
+    nlabels=nlabels,
+    ilabels=ilabels,
+    node_color=node_color,
+    node_size=node_size,
+    node_marker=node_marker,
+    node_strokewidth=node_strokewidth,
+    show_node_labels=show_node_labels,
+
+    #edges
+    elabels=elabels,
+    show_edge_labels=show_edge_labels,
+    edge_color=edge_color,
+    elabels_color=elabels_color,
+    #elabels_fontsize=elabels_fontsize,
+    tangents=tangents,
+
+    # arrow
+    arrow_show=arrow_show,
+    arrow_marker=arrow_marker,
+    arrow_size=arrow_size,
+    arrow_shift=arrow_shift,
+
+
+    # edges are linesegments
+    edge_plottype=:linesegments,
+    kwargs...
+    )
+    translate!(add_graph, 0,0,100);
+end
+
+
 """
     network_graph_map_plot(
         network_graph::MetaDiGraph,
@@ -519,6 +596,56 @@ function plot_network_tree(dss::String; kwargs...)
     plot_network_tree(eng, kwargs...)
 end
 
+function plot_network_tree!(
+    ax::Axis,
+    data::Dict{String,Any};
+    figure_size=(1000, 1200),
+    show_node_labels = false,
+    show_edge_labels = false,
+    layout=GraphMakie.Buchheim(),
+    edge_labels_type = :line_id,
+    phase = "1",
+    kwargs...
+    )    
+# Create the network meta graph 
+network_graph, _, _ = create_network_graph(data, layout)
+
+# Handle labels if required
+nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+
+# FORCED NODE FORMATTING:
+# 1. Identify the sourcebus
+if _is_eng(data)
+_decorate_nodes!(network_graph, data)
+node_color = [ props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+node_marker = [ props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+node_size = [ props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+_decorate_edges(network_graph, data)
+edge_color = [ get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+else
+node_color = :black
+node_marker = :circle
+node_size = 10
+edge_color = :black
+end
+# plot and return the network 
+return network_graph_plot!(
+        ax,
+        network_graph;
+        layout=layout,
+        figure_size=figure_size,
+        show_node_labels=show_node_labels,
+        nlabels=nlabels, 
+        show_edge_labels=show_edge_labels,
+        elabels=elabels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        edge_color=edge_color,
+        kwargs...
+    )
+end
 
 
 """
