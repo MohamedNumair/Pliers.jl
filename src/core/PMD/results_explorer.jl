@@ -20,7 +20,7 @@ function pf_results(eng::Dict{String, Any}; max_iter = 5000,kwargs...)
 
     is_explicit_netrual = length(eng["conductor_ids"]) > 3 ? true :  false
 
-    eng["data_model"] == PMD.MATHEMATICAL ? math = eng : eng["data_model"] == PMD.ENGINEERING ? math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("Data model not supported, make sure it is either ENGINEERING or MATHEMATICAL data model")
+    eng["data_model"] == PowerModelsDistribution.ENGINEERING ? math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("This function only supports ENGINEERING data model for the moment")
     
     add_start_vrvi!(math)
     PF = compute_mc_pf(math; explicit_neutral=is_explicit_netrual, max_iter=max_iter)
@@ -376,6 +376,28 @@ function plot_voltage_profile(eng_res; size = (800, 1000))
     return f
 end
 
+function plot_voltage_profile(eng_res; size = (800, 1000), phase = 1)
+    
+    @info "Calculating path lengths from each bus to the root bus"
+    Distances = find_path_lengths(eng_res)
+    @info "Phew done! d=====(￣▽￣*)b that took a while"
+
+    f = Figure(size = size)
+    colors = [:red, :green, :blue, :black]
+    ax = Axis(f[1,1])
+    bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res,Distances, string(phase))
+    if isempty(bus_labels)
+        display("No bus found for phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)])") 
+        return Distances
+    end
+    scatter!(ax, x_distances_m, y_voltages_V, color = colors[phase])
+
+    ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)]) the network"  
+    ax.xlabel = "Distance (m)"
+    ax.ylabel = "Voltage (V)"    
+
+    return f
+end
 
 # A phasor plotter 
 
