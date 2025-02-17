@@ -83,8 +83,12 @@ function fluff_bus_voltages!(PF_Res::Dict{String, Any})
             bus["V"] = bus["vr"] .+ bus["vi"]*im
             bus["vm"] = abs.(bus["V"])
             bus["va"] = angle.(bus["V"])
-        else
-            warning_text("Can't fluff $(keys(bus)). Now I can just fluff the `vr` and `vi`")
+        elseif haskey(bus, "va") && haskey(bus, "vm")
+            bus["V"] = bus["vm"] .* exp.(im.*bus["va"])
+            bus["vr"] = real.(bus["V"])
+            bus["vi"] = imag.(bus["V"])
+        else 
+            warning_text("Can't fluff $(keys(bus)). Now I can just fluff the (`vr`, `vi`) and (`va`, `vm`) pairs.")
         end 
     end
 
