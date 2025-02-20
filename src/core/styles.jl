@@ -43,3 +43,65 @@ _highlight_results_status = Highlighter(
     f=(data, i, j) -> i==1 && string(data[i,j]) == "PF_CONVERGED",
     crayon=Crayon(foreground = :green, bold=true)
 )
+
+
+#=
+
+ __       __            __        __           
+/  \     /  |          /  |      /  |          
+$$  \   /$$ |  ______  $$ |   __ $$/   ______  
+$$$  \ /$$$ | /      \ $$ |  /  |/  | /      \ 
+$$$$  /$$$$ | $$$$$$  |$$ |_/$$/ $$ |/$$$$$$  |
+$$ $$ $$/$$ | /    $$ |$$   $$<  $$ |$$    $$ |
+$$ |$$$/ $$ |/$$$$$$$ |$$$$$$  \ $$ |$$$$$$$$/ 
+$$ | $/  $$ |$$    $$ |$$ | $$  |$$ |$$       |
+$$/      $$/  $$$$$$$/ $$/   $$/ $$/  $$$$$$$/ 
+                                               
+                                               
+                                               
+=#
+
+
+# Makie Themes
+
+function set_journal_theme(; fontsize = 12,      )
+
+    journal_pub_theme = Theme(
+    
+    fontsize = fontsize,
+    
+    fonts = Attributes(
+        :bold => Pliers.Makie.texfont(:bold),
+        :bolditalic => Pliers.Makie.texfont(:bolditalic),
+        :italic => Pliers.Makie.texfont(:italic),
+        :regular => Pliers.Makie.texfont(:regular)
+        ),
+
+    
+    Axis = (
+        xticksmirrored = true,
+        yticksmirrored = true,
+        xtickalign=1,
+        ytickalign=1,
+        xminorgridvisible = true,
+        yminorgridvisible = true,
+    ),
+    Scatter = (
+        markersize = 10,
+
+    ),
+
+    Legend = (
+        labelsize = 11,
+        markersize = 4,
+        margin = 1, 
+        framevisible = true,
+        colgap = 0,
+        rowgap = -1,
+        
+        ),
+)
+
+set_theme!(journal_pub_theme)
+
+end
