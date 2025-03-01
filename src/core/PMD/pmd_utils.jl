@@ -67,23 +67,24 @@ end
 This function is used to get all possible voltage forms from the output of the OPF voltage variables, so it processes the bus voltages in the given Power Flow Results dictionary `PF_Res`. For each bus in `PF_Res["bus"]`, it checks if the bus has real (`vr`) and imaginary (`vi`) voltage components. If both components are present, it calculates the complex voltage `V`, the voltage magnitude `vm`, and the voltage angle `va` for the bus. A warning is issued indicating that only `vr` and `vi` can be processed.
 
 # Arguments
-- `PF_Res::Dict{String, Any}`: A dictionary containing the Power Flow Results, including bus voltage information.
+- `PF_Res::Dict{String, Any}`: A dictionary containing the Power Flow Results solution, including bus voltage information.
+!!! You need to pass the ["solution"] key of the Power Flow Results dictionary.
 
 # Modifies
 - Adds the following keys to each bus dictionary if `vr` and `vi` are present:
   - `V`: The complex voltage calculated as `vr + vi*im`.
   - `vm`: The magnitude of the complex voltage.
   - `va`: The angle of the complex voltage.
-
 """
-function fluff_bus_voltages!(PF_Res::Dict{String, Any})
-    
-    for (_, bus) in PF_Res["solution"]["bus"]
+function fluff_bus_voltages!(data::Dict{String, Any}) 
+    data = haskey(data,"solution") ? data["solution"] : data
+
+    for (_, bus) in data["bus"]
         if  haskey(bus, "vr") && haskey(bus, "vi") 
             bus["V"] = bus["vr"] .+ bus["vi"]*im
             bus["vm"] = abs.(bus["V"])
             bus["va"] = angle.(bus["V"])
-        elseif haskey(bus, "va") && haskey(bus, "vm")
+        elseif haskey(bus, "va") && haskey(bus, "vm") #TODO: check if when you apply the `solution_make_si` does the angles become in degrees ?
             bus["V"] = bus["vm"] .* exp.(im.*bus["va"])
             bus["vr"] = real.(bus["V"])
             bus["vi"] = imag.(bus["V"])
@@ -95,15 +96,107 @@ function fluff_bus_voltages!(PF_Res::Dict{String, Any})
 end 
 
 
-function dictify_voltages!(PF_res::Dict{String, Any}, math)
-    
-    fluff_bus_voltages!(PF_res)
-    pf_sol = PF_res["solution"]
+function solution_dictify_buses!(pf_sol::Dict{String, Any}, math::Dict{String, Any};  formulation = "IVR")
+    fluff_bus_voltages!(pf_sol)
+    pf_sol = haskey(pf_sol,"solution") ? pf_sol["solution"] : pf_sol
 
     for (b, bus) in pf_sol["bus"]
         terminals = math["bus"][b]["terminals"]
         # write a dictionary where the key is the terminal number and the value is the voltage at that terminal
-        bus["term"] = Dict(string(term) => bus["V"][i] for (i, term) in enumerate(terminals))
+        bus["voltage"] = Dict(string(term) => bus["V"][i] for (i, term) in enumerate(terminals))
     end 
 
+end
+
+function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR") 
+    # The idea is to create the complex current and power for each load and store it in the load dictionary under the key "current" and "power" respectively.
+    # The current is calculated as `I = P + Q*im` and the power is calculated as `S = P + Q*im`  
+    for (l, load) in pf_sol["load"]
+        terminals = math["load"][l]["connections"]
+        # write a dictionary where the key is the terminal number and the value is the current at that terminal
+        load["current"] = haskey(load,"crd_bus") ? Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals)) : Dict(string(term) => load["crd"][i] + load["cid"][i]*im for (i, term) in enumerate(terminals)) 
+        haskey(load, "pd") || haskey(load, "pd_bus") ? load["power"] =  haskey(load,"pd_bus") ?  Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals)) :  Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))  : nothing
+    end
+end 
+
+function solution_dictify_branches!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
+    # The idea is to create the complex current and power for each branch and store it in the branch dictionary under the key "current" and "power" respectively.
+    # The current is calculated as `I = P + Q*im` and the power is calculated as `S = P + Q*im`  
+    for (b, branch) in pf_sol["branch"]
+        f_terminals = math["branch"][b]["f_connections"]
+        t_terminals = math["branch"][b]["t_connections"]
+        # write a dictionary where the key is the terminal number and the value is the current at that terminal
+        branch["current_from"] = Dict(string(term) => branch["cr_fr"][i] + branch["ci_fr"][i]*im for (i, term) in enumerate(f_terminals))
+        haskey(branch, "csr_fr") ? branch["shunt_current_from"] = Dict(string(term) => branch["csr_fr"][i] + branch["csi_fr"][i]*im for (i, term) in enumerate(f_terminals)) : nothing
+        branch["current_to"] = Dict(string(term) => branch["cr_to"][i] + branch["ci_to"][i]*im for (i, term) in enumerate(t_terminals))
+        haskey(branch, "csr_to") ? branch["shunt_current_to"] = Dict(string(term) => branch["csr_to"][i] + branch["csi_to"][i]*im for (i, term) in enumerate(t_terminals)) : nothing
+        branch["power_from"] = Dict(string(term) => branch["pf"][i] + branch["qf"][i]*im for (i, term) in enumerate(f_terminals))
+        branch["power_to"] = Dict(string(term) => branch["pt"][i] + branch["qt"][i]*im for (i, term) in enumerate(t_terminals))
+    end
+end
+
+function solution_dictify_gens!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
+    # The idea is to create the complex current and power for each generator and store it in the generator dictionary under the key "current" and "power" respectively.
+    # The current is calculated as `I = P + Q*im` and the power is calculated as `S = P + Q*im`  
+    for (g, gen) in pf_sol["gen"]
+        terminals = setdiff(math["gen"][g]["connections"], [4]) 
+        # write a dictionary where the key is the terminal number and the value is the current at that terminal
+        gen["current"] = Dict(string(term) => gen["crg"][i] + gen["cig"][i]*im for (i, term) in enumerate(terminals))
+        haskey(gen, "pg") || haskey(gen, "pg_bus") ? gen["power"] = Dict(string(term) => gen["pg"][i] + gen["qg"][i]*im for (i, term) in enumerate(terminals)) : nothing
+    end
+end
+
+function dictify_solution!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
+    solution_dictify_buses!(pf_sol, math; formulation = formulation)
+    solution_dictify_loads!(pf_sol, math; formulation = formulation)
+    solution_dictify_branches!(pf_sol, math; formulation = formulation)
+    solution_dictify_gens!(pf_sol, math; formulation = formulation)
+end
+
+"""
+    separate_phase_neutral_voltages(pf_sol, bus_index)
+
+Separate the phase and neutral voltages from the power flow solution for a given bus.
+
+# Arguments
+- `pf_sol::Dict`: The power flow solution dictionary containing voltage information.
+- `bus_index::Int`: The index of the bus for which to separate the voltages.
+
+# Returns
+- `phase_voltage::Vector{ComplexF64}`: A vector containing the phase voltages (up to 3 phases).
+- `neutral_voltage::ComplexF64`: The neutral voltage. If the neutral voltage is not present, returns 0 + 0im "assuming grounded".
+
+# Notes
+- The neutral terminal is currently hardcoded to "4". This should be fixed in future versions.
+"""
+
+function separate_phase_neutral_voltages(pf_sol, bus_index)
+    phase_voltage = []
+    for i in 1:3 
+        if haskey(pf_sol["bus"][bus_index]["voltage"], string(i))
+            push!(phase_voltage, pf_sol["bus"][bus_index]["voltage"][string(i)])
+        end
+    end
+
+    neutral_voltage = ComplexF64[]
+
+    if haskey(pf_sol["bus"][bus_index]["voltage"], "4")  #TODO: fix hardcoding the neutral terminal
+        neutral_voltage = pf_sol["bus"][bus_index]["voltage"]["4"]
+    else 
+        neutral_voltage = 0 + 0im # assuming grounded
+    end
+
+    return phase_voltage, neutral_voltage
+end
+
+
+function phase_neutral_voltage_file(math, pf_sol)
+    math_meas = deepcopy(math)
+    for (b, bus) in pf_sol["bus"]
+        pvs, vn = Pliers.separate_phase_neutral_voltages(pf_sol, b)
+        vmn = abs.(pvs .- vn)
+        bus["vmn"] = vmn
+        math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], 4)
+    end
+    return math_meas
 end

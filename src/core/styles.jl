@@ -66,42 +66,61 @@ $$/      $$/  $$$$$$$/ $$/   $$/ $$/  $$$$$$$/
 
 function set_journal_theme(; fontsize = 12,      )
 
+
+    # colors definition:
+
+    # phase_red = Pliers.RGBAf(0.5,0.0,0.0,1.0)
+    # phase_green = Pliers.RGBAf(0.0859375,0.3125,0.17578125,1.0)
+    # phase_blue = Pliers.RGBAf(0.0,0.0,0.5,1.0)
+    # neutral_black = Pliers.RGBAf(0.0,0.0,0.0,1.0)
+    phase_red = :darkred
+    phase_green = :darkgreen
+    phase_blue = :darkblue
+    neutral_black = :black
+
     journal_pub_theme = Theme(
-    
-    fontsize = fontsize,
-    
-    fonts = Attributes(
-        :bold => Pliers.Makie.texfont(:bold),
-        :bolditalic => Pliers.Makie.texfont(:bolditalic),
-        :italic => Pliers.Makie.texfont(:italic),
-        :regular => Pliers.Makie.texfont(:regular)
-        ),
+                                
+                                fontsize = fontsize,
+                                palette = (color = [:darkred, :darkgreen, :darkblue, :black], marker = [:circle, :xcross]),
+                                fonts = Attributes(
+                                    :bold => Pliers.Makie.texfont(:bold),
+                                    :bolditalic => Pliers.Makie.texfont(:bolditalic),
+                                    :italic => Pliers.Makie.texfont(:italic),
+                                    :regular => Pliers.Makie.texfont(:regular)
+                                    ),
 
-    
-    Axis = (
-        xticksmirrored = true,
-        yticksmirrored = true,
-        xtickalign=1,
-        ytickalign=1,
-        xminorgridvisible = true,
-        yminorgridvisible = true,
-    ),
-    Scatter = (
-        markersize = 10,
+                                
+                                Axis = (
+                                    xticksmirrored = true,
+                                    yticksmirrored = true,
+                                    xtickalign=1,
+                                    ytickalign=1,
+                                    xminorgridvisible = true,
+                                    yminorgridvisible = true,
+                                ),
+                                Scatter = (
+                                    markersize = 10,
+                                    cycle = [:color, :marker],
+                                ),
 
-    ),
+                                Legend = (
+                                    labelsize = 11,
+                                    markersize = 4,
+                                    margin = 1, 
+                                    framevisible = true,
+                                    colgap = 0,
+                                    rowgap = -1,
+                                    
+                                    ),
 
-    Legend = (
-        labelsize = 11,
-        markersize = 4,
-        margin = 1, 
-        framevisible = true,
-        colgap = 0,
-        rowgap = -1,
-        
-        ),
+                                
+                                #palette = (color = [:red, :green, :blue, :black, :orange, :purple, :yellow, :cyan, :magenta, :gray]),
+                                #Lines = (cycle = Cycle([:color, :linestyle], covary = true),)
+
+                                #TODO: encode  the colors from Inkscape here 
 )
-
+theme_dark()
 set_theme!(journal_pub_theme)
 
 end
+
