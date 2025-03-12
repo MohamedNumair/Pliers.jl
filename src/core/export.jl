@@ -12,4 +12,9 @@ export pf_results, bus_res #results_explorer.jl
 export fluff_bus_voltages!,solution_dictify_buses!, solution_dictify_branches!, solution_dictify_loads! #pmd_utils.jl
 
 # core/PMDSE
-export viz_residuals, df_meas_res #pmdse_utils.jl
+export viz_residuals, df_meas_res, add_pd_qd_vmn! #pmdse_utils.jl
+
+
+
+# Styles
+export set_journal_theme

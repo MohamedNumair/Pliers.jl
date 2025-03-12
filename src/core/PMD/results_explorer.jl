@@ -344,60 +344,49 @@ function distance_voltage_array(eng_res, Distances, phase)
     return bus_labels, x_distances_m, y_voltages_V
 end
 
-
-function plot_voltage_profile(eng_res; size = (800, 1000))
-    
+function plot_voltage_profile(eng_res; size = (800, 1000), phase = nothing)
     @info "Calculating path lengths from each bus to the root bus"
     Distances = find_path_lengths(eng_res)
     @info "Phew done! d=====(￣▽￣*)b that took a while"
 
     f = Figure(size = size)
     colors = [:red, :green, :blue, :black]
-    axs = []
-    for (i, color) in enumerate(colors)
-        ax = Axis(f[i,1])
-        bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res,Distances, string(i))
+
+    if isnothing(phase)
+        axs = []
+        for (i, color) in enumerate(colors)
+            ax = Axis(f[i,1])
+            bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res, Distances, string(i))
+            if isempty(bus_labels)
+                display("No bus found for phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(i)])") 
+                return Distances
+            end
+            scatter!(ax, x_distances_m, y_voltages_V, color = color)
+            ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(i)]) of the network"
+            ax.xlabel = "Distance (m)"
+            ax.ylabel = "Voltage (V)"    
+            push!(axs, ax)
+        end
+        linkxaxes!(axs...)
+        pop!(axs)
+        display(axs)
+        linkyaxes!(axs...)
+    else
+        ax = Axis(f[1,1])
+        bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res, Distances, string(phase))
         if isempty(bus_labels)
-            display("No bus found for phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(i)])") 
+            display("No bus found for phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)])") 
             return Distances
         end
-        scatter!(ax, x_distances_m, y_voltages_V, color = color)
-
-        ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(i)]) the network"  
+        scatter!(ax, x_distances_m, y_voltages_V, color = colors[phase])
+        ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)]) of the network"
         ax.xlabel = "Distance (m)"
-        ax.ylabel = "Voltage (V)"    
-        push!(axs, ax)
+        ax.ylabel = "Voltage (V)"
     end
 
-    linkxaxes!(axs...)
-    pop!(axs)
-    display(axs)
-    linkyaxes!(axs...)
     return f
 end
 
-function plot_voltage_profile(eng_res; size = (800, 1000), phase = 1)
-    
-    @info "Calculating path lengths from each bus to the root bus"
-    Distances = find_path_lengths(eng_res)
-    @info "Phew done! d=====(￣▽￣*)b that took a while"
-
-    f = Figure(size = size)
-    colors = [:red, :green, :blue, :black]
-    ax = Axis(f[1,1])
-    bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res,Distances, string(phase))
-    if isempty(bus_labels)
-        display("No bus found for phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)])") 
-        return Distances
-    end
-    scatter!(ax, x_distances_m, y_voltages_V, color = colors[phase])
-
-    ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)]) the network"  
-    ax.xlabel = "Distance (m)"
-    ax.ylabel = "Voltage (V)"    
-
-    return f
-end
 
 # A phasor plotter 
 

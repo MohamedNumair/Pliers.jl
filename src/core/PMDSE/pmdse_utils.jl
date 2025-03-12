@@ -356,3 +356,31 @@ function math_meas_table(math::Dict{String, Any}, condition::Function; se_sol= n
     extra_keys(meass, ["cmp", "cmp_id", "var", "crit", "res"])
         
 end
+
+
+function add_pd_qd_vmn!(SE_RES::Dict{String, Any}, math::Dict{String, Any})
+    for (l, lo) in SE_RES["solution"]["load"]
+        load_bus = math["load"][l]["load_bus"]
+        
+        lo["power"] = Dict{}()
+        for (t, I_l_cmplx) in lo["current"]
+            V_l_cmplx = SE_RES["solution"]["bus"][string(load_bus)]["voltage"][t]
+            S_l_cmplx = V_l_cmplx * conj(I_l_cmplx)
+            lo["power"][t] = Dict("pd" => real(S_l_cmplx), "qd" => imag(S_l_cmplx), "S" => S_l_cmplx)
+        end
+        sorted_keys = sort(collect(keys(lo["power"])), by = x -> parse(Int, x))
+        lo["pd"] = [lo["power"][key]["pd"] for key in sorted_keys]
+        lo["qd"] = [lo["power"][key]["qd"] for key in sorted_keys]
+    end
+    
+    for (b, bus) in SE_RES["solution"]["bus"]
+        bus["vmn"] = Dict{}()
+        for (t, v) in bus["voltage"]
+            if t in ["1", "2", "3"]
+                bus["vmn"][t] = haskey( bus["voltage"], "4") ? abs(v - bus["voltage"]["4"]) : abs(v)
+            end
+        end
+        sorted_keys = sort(collect(keys(bus["vmn"])), by = x -> parse(Int, x))
+        bus["vmn"] = [bus["vmn"][key] for key in sorted_keys]
+    end
+end  

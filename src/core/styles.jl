@@ -78,16 +78,30 @@ function set_journal_theme(; fontsize = 12,      )
     phase_blue = :darkblue
     neutral_black = :black
 
+try
+    global fontTermesRegular =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-regular.otf"
+    global fontTermesBold =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-bold.otf"
+    global fontTermesItalic =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-italic.otf"
+    global fontTermesBoldItalic =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-bolditalic.otf"
+catch
+    global fontTermesRegular = Pliers.Makie.texfont(:regular)
+    global fontTermesBold = Pliers.Makie.texfont(:bold)
+    global fontTermesItalic = Pliers.Makie.texfont(:italic)
+    global fontTermesBoldItalic = Pliers.Makie.texfont(:bolditalic)
+    warning_text("Fonts not found for the IEEE fonts will default to ComputerModern")
+end
+
     journal_pub_theme = Theme(
                                 
                                 fontsize = fontsize,
                                 palette = (color = [:darkred, :darkgreen, :darkblue, :black], marker = [:circle, :xcross]),
-                                fonts = Attributes(
-                                    :bold => Pliers.Makie.texfont(:bold),
-                                    :bolditalic => Pliers.Makie.texfont(:bolditalic),
-                                    :italic => Pliers.Makie.texfont(:italic),
-                                    :regular => Pliers.Makie.texfont(:regular)
-                                    ),
+                                # fonts = Attributes(
+                                #     :bold => Pliers.Makie.texfont(:bold),
+                                #     :bolditalic => Pliers.Makie.texfont(:bolditalic),
+                                #     :italic => Pliers.Makie.texfont(:italic),
+                                #     :regular => Pliers.Makie.texfont(:regular)
+                                #     ),
+                                fonts = (; regular = fontTermesRegular, bold = fontTermesBold, italic = fontTermesItalic, bolditalic = fontTermesBoldItalic),
 
                                 
                                 Axis = (
@@ -104,12 +118,12 @@ function set_journal_theme(; fontsize = 12,      )
                                 ),
 
                                 Legend = (
-                                    labelsize = 11,
+                                    #labelsize = fontsize,
                                     markersize = 4,
-                                    margin = 1, 
                                     framevisible = true,
                                     colgap = 0,
                                     rowgap = -1,
+
                                     
                                     ),
 
@@ -122,5 +136,25 @@ function set_journal_theme(; fontsize = 12,      )
 theme_dark()
 set_theme!(journal_pub_theme)
 
+inch = 96
+pt = 4/3
+cm = inch / 2.54
+ieeecolumn = 3.5 * inch
+ieee2column = 7.16 * inch
+
+return inch, pt, cm, ieeecolumn, ieee2column
+
 end
 
+
+#=
+
+
+IEEE Size
+The size of a graphic refers to its dimensions (the width and height), which may be measured in inches, millimeters, or picas. Most charts, graphs, and tables are sized to be one column width or two columns width:
+
+One column width: 3.5 inches, 88.9 millimeters, or 21 picas 
+Two columns width: 7.16 inches, 182 millimeters, or 43 picas
+
+
+=#
