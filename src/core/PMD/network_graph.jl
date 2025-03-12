@@ -6,10 +6,10 @@ end
     create_network_graph_eng(eng::Dict{String,Any}, fallback_layout) -> MetaDiGraph, Function, Dict{Symbol,Any}
 """
 function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout) 
-    PowerModelsDistribution.transform_loops!(eng)
+    PowerModelsDistribution.transform_loops!(eng) #TODO: remove comment
     eng_sym = convert_keys_to_symbols(deepcopy(eng))
     network_graph = MetaDiGraph()
-
+    
     lons = []
     lats = []
     
@@ -57,11 +57,14 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     end
 
+
+    ### DETERMINE THE ROOT BUS
+    sourcebus = eng_sym[:voltage_source][:source][:bus]
     
     # Determine source coordinates if available # and enrich the lines with the linecodes details
     lon_s, lat_s = nothing, nothing
     if length(lons) > 0
-        source_line = findfirst(line -> line[:f_bus] == "sourcebus", eng_sym[:line])
+        source_line = findfirst(line -> line[:f_bus] == sourcebus, eng_sym[:line])
         if source_line !== nothing
             lon_s = eng_sym[:bus][Symbol(eng_sym[:line][source_line][:t_bus])][:lon]
             lat_s = eng_sym[:bus][Symbol(eng_sym[:line][source_line][:t_bus])][:lat]
@@ -71,8 +74,8 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     layouting_vector = []
 
     # Add `sourcebus` as the root
-    if haskey(eng_sym[:bus], :sourcebus)
-        add_vertex!(network_graph, eng_sym[:bus][:sourcebus])
+    if haskey(eng_sym[:bus], Symbol(sourcebus))
+        add_vertex!(network_graph, eng_sym[:bus][Symbol(sourcebus)])
         if length(lons) > 0 && lon_s !== nothing && lat_s !== nothing
             push!(layouting_vector, (lon_s, lat_s))
         end
@@ -82,7 +85,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     # Add the rest of the buses
     for (_, bus) in eng_sym[:bus]
-        if bus[:bus_id] != :sourcebus
+        if bus[:bus_id] != Symbol(sourcebus)
             add_vertex!(network_graph, bus)
             if haskey(bus, :lon) && haskey(bus, :lat)
                 push!(layouting_vector, (bus[:lon], bus[:lat]))
@@ -169,7 +172,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     end
 
 
-    # Determine source coordinates if available
+    # Determine source coordinates if available 
     lon_s, lat_s = nothing, nothing
     if length(lons) > 0
         virtual_branch = findfirst(branch -> contains(branch["name"], "_virtual_branch.voltage_source.source"), math["branch"])
@@ -255,3 +258,5 @@ function get_graph_edge(G, edge_id, key)
     end
     return G.eprops[Eid...][Symbol(key)]
 end
+
+# edge_color = [get_graph_edge(G, edge)[:linecodes][:rs] for edge in edges(G)]
