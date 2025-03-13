@@ -200,3 +200,38 @@ function phase_neutral_voltage_file(math, pf_sol)
     end
     return math_meas
 end
+
+function ptot_qtot_from_loads(math, pf_sol)
+    ptot = 0.0
+    qtot = 0.0
+    for (l, load) in pf_sol["load"]
+        ptot += sum(real.(values(load["power"])))
+        qtot += sum(imag.(values(load["power"])))
+    end
+    return ptot, qtot
+end
+
+function write_delta_readings(math, pf_sol)
+    math_meas = deepcopy(math)
+
+    for (b,bus) in pf_sol["bus"]
+        bus["vmn2"] = []
+        for t in setdiff(math["bus"][b]["terminals"],[4])
+            push!(bus["vmn2"], (bus["vr"][t] - bus["vr"][4])^2 + (bus["vi"][t] - bus["vi"][4])^2)
+        end
+        bus["vmn"] = sqrt.(bus["vmn2"])
+    math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], 4)
+    end 
+
+    for (l, load) in math["load"]
+    if load["configuration"] == DELTA
+        pf_sol["load"][l]["ptot"] = [sum(pf_sol["load"][l]["pd"])]
+        pf_sol["load"][l]["qtot"] = [sum(pf_sol["load"][l]["qd"])]
+
+        load_bus = pf_sol["bus"][string(load["load_bus"])]
+        load_bus["vll"] = sqrt.([ (load_bus["vr"][x] - load_bus["vr"][y] )^2 + (load_bus["vi"][x] - load_bus["vi"][y] )^2 for (x,y) in [(1,2), (2,3), (3,1)]])
+        end
+    end
+return math_meas
+end
+

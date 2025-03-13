@@ -77,12 +77,12 @@ function set_journal_theme(; fontsize = 12,      )
     phase_green = :darkgreen
     phase_blue = :darkblue
     neutral_black = :black
-
 try
-    global fontTermesRegular =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-regular.otf"
-    global fontTermesBold =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-bold.otf"
-    global fontTermesItalic =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-italic.otf"
-    global fontTermesBoldItalic =  raw"C:\Users\mnumair\OneDrive - KU Leuven\PhD Files\7 - Papers and Publications\FiguresFactory\Fonts\tex-gyre\tex-gyre\opentype\texgyretermes-bolditalic.otf"
+    global fontTermesRegular =  joinpath(dirname(dirname(pathof(Pliers))), "assets", "fonts", "gyre-opentype", "texgyretermes-regular.otf")
+    global fontTermesBold =  joinpath(dirname(dirname(pathof(Pliers))), "assets", "fonts", "gyre-opentype", "texgyretermes-bold.otf")
+    global fontTermesItalic =  joinpath(dirname(dirname(pathof(Pliers))), "assets", "fonts", "gyre-opentype", "texgyretermes-italic.otf")
+    global fontTermesBoldItalic =  joinpath(dirname(dirname(pathof(Pliers))), "assets", "fonts", "gyre-opentype", "texgyretermes-bolditalic.otf")
+
 catch
     global fontTermesRegular = Pliers.Makie.texfont(:regular)
     global fontTermesBold = Pliers.Makie.texfont(:bold)
