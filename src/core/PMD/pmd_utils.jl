@@ -175,7 +175,7 @@ function dictify_solution!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; f
 end
 
 """
-    separate_phase_neutral_voltages(pf_sol, bus_index)
+    _separate_phase_neutral_voltages(pf_sol, bus_index)
 
 Separate the phase and neutral voltages from the power flow solution for a given bus.
 
@@ -190,8 +190,7 @@ Separate the phase and neutral voltages from the power flow solution for a given
 # Notes
 - The neutral terminal is currently hardcoded to "4". This should be fixed in future versions.
 """
-
-function separate_phase_neutral_voltages(pf_sol, bus_index)
+function _separate_phase_neutral_voltages(pf_sol, bus_index)
     phase_voltage = []
     for i in 1:3 
         if haskey(pf_sol["bus"][bus_index]["voltage"], string(i))
@@ -211,14 +210,29 @@ function separate_phase_neutral_voltages(pf_sol, bus_index)
 end
 
 
-function phase_neutral_voltage_file(math, pf_sol)
-    math_meas = deepcopy(math)
+
+function _get_vmn(pf_sol, math, math_meas)
     for (b, bus) in pf_sol["bus"]
-        pvs, vn = Pliers.separate_phase_neutral_voltages(pf_sol, b)
+        pvs, vn = _separate_phase_neutral_voltages(pf_sol, b)
         vmn = abs.(pvs .- vn)
         bus["vmn"] = vmn
         math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], _N_IDX)
     end
+end
+
+function _get_pd_qd(pf_sol, math, math_meas)
+    for (l, _) in pf_sol["load"]
+        math_meas["load"][l]["connections"] = setdiff(math["load"][l]["connections"], _N_IDX)
+    end
+end
+
+function add_vmn_p_q(math, pf_sol)
+    math_meas = deepcopy(math)
+
+
+    _get_vmn(pf_sol, math, math_meas)
+    _get_pd_qd(pf_sol, math, math_meas)
+    
     return math_meas
 end
 
