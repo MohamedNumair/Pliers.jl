@@ -155,3 +155,8 @@ function _pretty_diag_matrix(mat::Matrix)
                          formatters    = ft_printf("%1.0f", 1:1),
                          )
 end
+
+
+function show_example(dict::Dict)
+    return first(dict).second
+end

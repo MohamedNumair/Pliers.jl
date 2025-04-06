@@ -97,7 +97,7 @@ function viz_residuals(SE_en, math_en, se_sol_en)
 
 end
 
-
+#TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
 function viz_residuals(SE_en, math_en)
 
     se_sol_en = SE_en["solution"]
@@ -384,3 +384,69 @@ function add_pd_qd_vmn!(SE_RES::Dict{String, Any}, math::Dict{String, Any})
         bus["vmn"] = [bus["vmn"][key] for key in sorted_keys]
     end
 end  
+
+"""
+    _calculate_MAPE(SE_RES, PF_RES, math)
+
+Calculate the Mean Absolute Percentage Error (MAPE) between state estimation (SE) results 
+and power flow (PF) results.
+
+# Arguments
+- `SE_RES::Dict`: A dictionary containing the state estimation results.
+- `PF_RES::Dict`: A dictionary containing the power flow results.
+- `math`: A mathematical utility or context used for processing the solutions.
+
+# Returns
+- `mean_APE::Float64`: The mean absolute percentage error across all buses and terminals.
+- `APEs::Vector{Float64}`: A vector containing the absolute percentage errors for each bus and terminal.
+
+# Details
+The function compares the voltage solutions from the state estimation (`SE_RES`) and 
+power flow (`PF_RES`) results. It calculates the absolute percentage error (APE) for 
+each bus and terminal, filters out any `NaN` values, and computes the mean APE.
+
+# Notes
+- The function assumes that the solutions in `SE_RES` and `PF_RES` are structured as 
+  dictionaries with nested keys for buses and their respective voltages.
+- The `dictify_solution!` function is used to process the solutions before comparison.
+"""
+function _calculate_MAPE(SE_RES, PF_RES, math)
+
+    se_sol  = SE_RES["solution"]
+    pf_sol = PF_RES["solution"]
+
+    dictify_solution!(pf_sol, math)
+    dictify_solution!(se_sol, math)
+
+    APEs = [] 
+    Errors = [] 
+
+    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
+    APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
+    for (b,bus) in se_sol["bus"]
+
+        for (term,Vse) in bus["voltage"]
+            # println("Bus    :",b)
+            # println("Term   :",term)
+            # println("Vse   :",Vse)
+            # println("Vpf     :", pf_sol["bus"][b]["voltage"][term])
+            Vpf = pf_sol["bus"][b]["voltage"][term]
+
+            # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
+            APE = ( abs.( Vse - Vpf ) ./ abs.(Vpf) )* 100
+            Error = Vse - Vpf
+            push!(APEs,APE)
+            push!(Errors,Error)
+
+            push!(APEs_df, (b, term, APE))
+            push!(Errors_df, (b, term, Error))
+
+        end
+
+    end
+    
+    APEs_nonan = filter(x -> !isnan(x), APEs)
+    mean_APE = mean(APEs_nonan)
+    return mean_APE, APEs_df, Errors_df
+
+end

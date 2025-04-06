@@ -3,10 +3,35 @@ The Idea here is to get the results dictionary of PMD power flow or optimal powe
 =#
 
 
-function _calc_bases_from_sol_dict(pf_sol::Dict{String,Any})
-    is_perunit = pf_sol["per_unit"]
-    vbase_V = first(pf_sol["settings"]["vbases_default"]).second*pf_sol["settings"]["voltage_scale_factor"]
-    sbase_VA = pf_sol["settings"]["sbase_default"]*pf_sol["settings"]["power_scale_factor"]
+"""
+    calc_bases_from_dict(data::Dict{String,Any}) -> Tuple{Bool, Float64, Float64, Float64, Float64}
+
+Calculate electrical base quantities from a data dictionary.
+
+# Arguments
+- `data::Dict{String,Any}`: A dictionary containing network data (eng, math or pf_sol are all). 
+  It must include the following keys:
+  - `"per_unit"`: A boolean indicating whether the values are in per-unit.
+  - `"settings"`: A nested dictionary with the following keys:
+    - `"vbases_default"`: A collection where the first element has a `second` field representing the base voltage in volts.
+    - `"voltage_scale_factor"`: A scaling factor for voltage.
+    - `"sbase_default"`: The default base apparent power in VA.
+    - `"power_scale_factor"`: A scaling factor for power.
+
+# Returns
+A tuple containing:
+1. `is_perunit::Bool`: Indicates if the values are in per-unit.
+2. `vbase_V::Float64`: The base voltage in volts.
+3. `sbase_VA::Float64`: The base apparent power in volt-amperes.
+4. `Zbase_Ω::Float64`: The base impedance in ohms.
+5. `Ibase_A::Float64`: The base current in amperes.
+
+# Example
+"""
+function calc_bases_from_dict(data::Dict{String,Any})
+    is_perunit = data["per_unit"]
+    vbase_V = first(data["settings"]["vbases_default"]).second*data["settings"]["voltage_scale_factor"]
+    sbase_VA = data["settings"]["sbase_default"]*data["settings"]["power_scale_factor"]
     Zbase_Ω = vbase_V^2/sbase_VA
     Ibase_A = sbase_VA/vbase_V
     return is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A
@@ -42,7 +67,7 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
     # Moving results into the ENG dictionary 
     eng = deepcopy(eng)
     pf_sol = results["solution"]
-    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = _calc_bases_from_sol_dict(pf_sol)
+    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(pf_sol)
 
     for (b, bus) in pf_sol["bus"]
         bus["V"] = bus["vm"] .* exp.(im * bus["va"])
@@ -167,7 +192,7 @@ end
 
 
 function pf_results_buses(pf_sol::Dict{String, Any}, math; keep_pu::Bool)
-    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = _calc_bases_from_sol_dict(pf_sol)
+    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(pf_sol)
     header("Buses Results")
 
     if keep_pu*is_perunit

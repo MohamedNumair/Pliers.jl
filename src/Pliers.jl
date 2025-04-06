@@ -44,6 +44,7 @@ using Ipopt
 const pkg_name = "Pliers"
 const BASE_DIR = dirname(@__DIR__)
 
+_N_IDX = 4 # representing the neutral index in terminals 
 
 # data structure
 const _DF = DataFrames

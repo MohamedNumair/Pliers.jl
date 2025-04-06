@@ -64,8 +64,13 @@ $$/      $$/  $$$$$$$/ $$/   $$/ $$/  $$$$$$$/
 
 # Makie Themes
 
-function set_journal_theme(; fontsize = 12,      )
+function set_journal_theme(; fontsize = nothing,      )
 
+    inch = 96
+    pt = 4/3
+    cm = inch / 2.54
+    ieeecolumn = 3.5 * inch
+    ieee2column = 7.16 * inch
 
     # colors definition:
 
@@ -93,7 +98,7 @@ end
 
     journal_pub_theme = Theme(
                                 
-                                fontsize = fontsize,
+                                fontsize = fontsize == nothing ? 8pt : fontsize,
                                 palette = (color = [:darkred, :darkgreen, :darkblue, :black], marker = [:circle, :xcross]),
                                 # fonts = Attributes(
                                 #     :bold => Pliers.Makie.texfont(:bold),
@@ -113,7 +118,7 @@ end
                                     yminorgridvisible = true,
                                 ),
                                 Scatter = (
-                                    markersize = 10,
+                                    markersize = 5,
                                     cycle = [:color, :marker],
                                 ),
 
@@ -121,9 +126,10 @@ end
                                     #labelsize = fontsize,
                                     markersize = 4,
                                     framevisible = true,
-                                    colgap = 0,
-                                    rowgap = -1,
-
+                                    colgap = -1,
+                                    rowgap = -3,
+                                    
+                                    
                                     
                                     ),
 
@@ -136,11 +142,6 @@ end
 theme_dark()
 set_theme!(journal_pub_theme)
 
-inch = 96
-pt = 4/3
-cm = inch / 2.54
-ieeecolumn = 3.5 * inch
-ieee2column = 7.16 * inch
 
 return inch, pt, cm, ieeecolumn, ieee2column
 

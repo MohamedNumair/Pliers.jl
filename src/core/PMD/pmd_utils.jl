@@ -146,6 +146,27 @@ function solution_dictify_gens!(pf_sol::Dict{String, Any}, math::Dict{String, An
     end
 end
 
+"""
+    dictify_solution!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
+
+Transforms and organizes the solution data from a power flow computation into a structured dictionary format.
+
+# Arguments
+- `pf_sol::Dict{String, Any}`: A dictionary containing the power flow solution data.
+- `math::Dict{String, Any}`: A dictionary containing the mathematical model data.
+- `formulation::String` (optional): Specifies the formulation type to be used. Defaults to `"IVR"`.
+
+# Description
+This function modifies the `pf_sol` dictionary in-place by calling helper functions to process and structure
+data for buses, loads, branches, and generators. Each helper function is responsible for handling a specific
+component of the power flow solution.
+
+# Notes
+- The function assumes that the helper functions `solution_dictify_buses!`, `solution_dictify_loads!`,
+  `solution_dictify_branches!`, and `solution_dictify_gens!` are defined and properly handle their respective
+  components.
+- The `formulation` parameter allows customization of the solution processing based on the formulation type.
+"""
 function dictify_solution!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
     solution_dictify_buses!(pf_sol, math; formulation = formulation)
     solution_dictify_loads!(pf_sol, math; formulation = formulation)
@@ -180,7 +201,7 @@ function separate_phase_neutral_voltages(pf_sol, bus_index)
 
     neutral_voltage = ComplexF64[]
 
-    if haskey(pf_sol["bus"][bus_index]["voltage"], "4")  #TODO: fix hardcoding the neutral terminal
+    if haskey(pf_sol["bus"][bus_index]["voltage"], string(_N_IDX))  
         neutral_voltage = pf_sol["bus"][bus_index]["voltage"]["4"]
     else 
         neutral_voltage = 0 + 0im # assuming grounded
@@ -196,7 +217,7 @@ function phase_neutral_voltage_file(math, pf_sol)
         pvs, vn = Pliers.separate_phase_neutral_voltages(pf_sol, b)
         vmn = abs.(pvs .- vn)
         bus["vmn"] = vmn
-        math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], 4)
+        math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], _N_IDX)
     end
     return math_meas
 end
@@ -233,5 +254,132 @@ function write_delta_readings(math, pf_sol)
         end
     end
 return math_meas
+end
+
+
+
+
+function kron_reduce_impedance(m::Matrix)
+    # Check if the matrix is 4x4
+    if size(m) != (4, 4)
+        throw(DimensionMismatch("Input matrix must be 4x4."))
+    end
+
+    # Partition the matrix
+    A = m[1:3, 1:3]  # 3x3 top-left block
+    B = m[1:3, 4:4]  # 3x1 top-right block (column vector)
+    C = m[4:4, 1:3]  # 1x3 bottom-left block (row vector)
+    D_val = m[4, 4]    # 1x1 bottom-right block (scalar)
+
+    # Check if D is invertible (non-zero for scalar)
+    if isapprox(D_val, 0.0; atol=eps(real(ComplexF64)))
+        error("Cannot perform Kron reduction: the pivot element m[4, 4] is zero or close to zero.")
+        # Alternatively, depending on context, you might return an error or handle it differently.
+        # For numerical stability, using inv(D) where D is a 1x1 matrix might be better
+        # D = m[4:4, 4:4] # Represent D as a 1x1 matrix
+        # if det(D) == 0 ... etc.
+    end
+
+    # Calculate the inverse of D (which is just 1/D_val for a scalar)
+    D_inv_val = 1.0 / D_val
+
+    # Calculate the Schur complement: A - B * D_inv * C
+    # Note: B * D_inv_val * C performs matrix multiplication: (3x1) * scalar * (1x3) -> 3x3
+    reduced_matrix = A - B * D_inv_val * C
+
+    return reduced_matrix
+end
+
+
+"""
+    get_sequence_components(m_phase::Matrix{ComplexF64})
+
+Calculates the zero, positive, and negative sequence components of a 3x3
+complex matrix representing phase quantities (e.g., impedance or admittance).
+
+# Arguments
+- `m_phase::Matrix{ComplexF64}`: The input 3x3 complex matrix in phase coordinates.
+
+# Returns
+- `Tuple{Matrix{ComplexF64}, ComplexF64, ComplexF64, ComplexF64}`: A tuple containing:
+    1. The full 3x3 sequence matrix (M_seq).
+    2. The zero sequence component (diagonal element M_seq[1, 1]).
+    3. The positive sequence component (diagonal element M_seq[2, 2]).
+    4. The negative sequence component (diagonal element M_seq[3, 3]).
+
+# Throws
+- `DimensionMismatch`: If the input matrix is not 3x3.
+
+
+# Usage
+Assume 'M_red' is the 3x3 matrix obtained from the previous Kron reduction step
+Let's create a sample symmetrical 3x3 matrix for demonstration:
+Z_phase = ComplexF64[
+    10+5im   2+1im   2+1im;
+    2+1im   10+5im  2+1im;
+    2+1im   2+1im   10+5im
+]
+This represents a balanced system where off-diagonals are equal.
+
+Or use a more general (unbalanced) example:
+Z_phase = ComplexF64[
+     10+5im   1+0.5im  2+1im;
+     1+0.5im  12+6im   3+1.5im;
+     2+1im    3+1.5im  11+5.5im
+]
+
+try
+    # Calculate sequence components
+    Z_seq_matrix, Z0, Z1, Z2 = calculate_sequence_components(Z_phase)
+
+    println("Original Phase Matrix Z_phase:")
+    display(Z_phase)
+
+    println("\nSequence Matrix Z_seq:")
+    display(round.(Z_seq_matrix; digits=4)) # Round for cleaner display
+
+    println("\nSequence Components:")
+    println("Zero Sequence (Z0): ", round(Z0; digits=4))
+    println("Positive Sequence (Z1): ", round(Z1; digits=4))
+    println("Negative Sequence (Z2): ", round(Z2; digits=4))
+
+catch e
+    println("Error: ", e)
+end
+"""
+function get_sequence_components(m_phase::Matrix)
+    # Check if the matrix is 3x3
+    if size(m_phase) != (3, 3)
+        throw(DimensionMismatch("Input matrix must be 3x3."))
+    end
+
+    # Define the complex operator 'a' (1 angle 120 degrees)
+    α = exp(im * 2 * pi / 3) # cis(120°) or -0.5 + im*sqrt(3)/2
+
+    # Define the Fortescue transformation matrix T
+    T = ComplexF64[
+        1  1      1;
+        1  α^2    α;
+        1  α      α^2
+    ]
+
+    # Define the inverse of the Fortescue transformation matrix T_inv
+    # T_inv = (1/3) * T' conjugate transpose (Hermitian transpose)
+    # Or explicitly:
+    T_inv = (1/3) * ComplexF64[
+        1  1      1;
+        1  α      α^2;
+        1  α^2    α
+    ]
+
+    # Calculate the sequence matrix: M_seq = T_inv * M_phase * T
+    m_seq = T_inv * m_phase * T
+
+    # Extract the diagonal components
+    zero_sequence = m_seq[1, 1]
+    positive_sequence = m_seq[2, 2]
+    negative_sequence = m_seq[3, 3]
+
+    return m_seq, zero_sequence, positive_sequence, negative_sequence
 end
 
