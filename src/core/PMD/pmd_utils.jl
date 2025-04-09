@@ -226,13 +226,27 @@ function _get_pd_qd(pf_sol, math, math_meas)
     end
 end
 
+"""
+    add_vmn_p_q(math, pf_sol) -> math_meas
+
+Adds voltage magnitude (VMN), active power (P), and reactive power (Q) measurements 
+to the given mathematical model.
+
+# Arguments
+- `math`: The mathematical model to which the measurements will be added.
+- `pf_sol`: The power flow solution containing the necessary data for VMN, P, and Q.
+
+# Returns
+- `math_meas`: A deep copy of the input `math` with the added VMN, P, and Q measurements.
+
+# Notes
+This function internally calls `_get_vmn` to add voltage magnitude measurements 
+and `_get_pd_qd` to add active and reactive power measurements.
+"""
 function add_vmn_p_q(math, pf_sol)
     math_meas = deepcopy(math)
-
-
     _get_vmn(pf_sol, math, math_meas)
     _get_pd_qd(pf_sol, math, math_meas)
-    
     return math_meas
 end
 
@@ -397,3 +411,60 @@ function get_sequence_components(m_phase::Matrix)
     return m_seq, zero_sequence, positive_sequence, negative_sequence
 end
 
+
+
+
+"""
+    calculate_vuf(PF_RES, math)
+
+Calculates the Voltage Unbalance Factor (VUF) for each bus in the power flow result.
+
+VUF is defined as:
+    VUF = |V₋ / V₊| × 100%
+where:
+- V₊ is the positive-sequence voltage
+- V₋ is the negative-sequence voltage
+
+It uses the phase-to-neutral complex voltages from the power flow solution, assumed
+to be available at each bus under keys "1", "2", "3" (phases) and "4" (neutral)
+after applying `dictify_solution!`.
+
+Returns the modified PF_RES with VUF values added at each bus as:
+    PF_RES["solution"]["bus"][bus_id]["vuf"] = <Float64>
+"""
+function calculate_vuf!(PF_RES, math)
+    pf_sol = PF_RES["solution"]
+
+    dictify_solution!(pf_sol, math)
+
+    # Operator 'α' = exp(j*2π/3)
+    α = cis(2π/3)
+    α² = α^2
+
+    VUF_dict = Dict{String, Float64}()
+
+    # get loaded buses 
+    for (bus_id, bus_data) in pf_sol["bus"]
+        voltages = bus_data["voltage"]
+
+        # Extract phase-to-neutral voltages
+        Va = voltages["1"] - voltages["4"]
+        Vb = voltages["2"] - voltages["4"]
+        Vc = voltages["3"] - voltages["4"]
+
+        # Symmetrical component transformation
+        V0 = (Va + Vb + Vc) / 3
+        V1 = (Va + α  * Vb + α² * Vc) / 3  # Positive-sequence
+        V2 = (Va + α² * Vb + α  * Vc) / 3  # Negative-sequence
+
+        # Compute VUF
+        vuf = abs(V2 / V1) * 100
+
+        # Store VUF at the bus
+        bus_data["vuf"] = vuf
+
+        VUF_dict[bus_id] = vuf
+    end
+
+    return VUF_dict
+end

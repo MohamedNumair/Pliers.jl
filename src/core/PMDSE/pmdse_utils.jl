@@ -1,102 +1,3 @@
-
-function viz_residuals(SE_en, math_en, se_sol_en)
-        
-    printstyled(" %%%%%%%%%%%%%%%%%% STATS %%%%%%%%%%%%%%%%%% \n", color=:blue, underline = true)
-    printstyled(" Solve time : $(SE_en["solve_time"]) \n", color=:green)
-    printstyled(" objective : $(SE_en["objective"]) \n", color=:green)
-    printstyled(" termination : $(SE_en["termination_status"]) \n", color=:green)
-    printstyled(" primal : $(SE_en["primal_status"]) \n", color=:green)
-
-    # Merge residuals with meas
-    for (m, meas) in se_sol_en["meas"]
-        math_en["meas"][m]["res"] = meas["res"]
-    end
-
-
-    # Extracting values into a DataFrame for visualization
-    rows = String[]
-    res1 = Float64[]
-    res2 = Float64[]
-    res3 = Float64[]
-
-    for (key, value) in math_en["meas"]
-        cmp = value["cmp"]
-        cmp_id = value["cmp_id"]
-        var = value["var"]
-        name = math_en[string(cmp)][string(cmp_id)]["name"]
-        row_name = "$(cmp)_$(cmp_id)_$(var)"
-        push!(rows, row_name)
-        res_values = value["res"]
-        push!(res1, get(res_values, 1, NaN))
-        push!(res2, get(res_values, 2, NaN))
-        push!(res3, get(res_values, 3, NaN))
-    end
-
-    df_meas_res = DataFrame(Meas = rows, Res1 = res1, Res2 = res2, Res3 = res3)
-    sort!(df_meas_res, :Meas)
-
-    min_val = minimum([
-        minimum(filter(!isnan, df_meas_res.Res1)), 
-        minimum(filter(!isnan, df_meas_res.Res2)), 
-        minimum(filter(!isnan, df_meas_res.Res3))
-    ])
-
-    max_val = maximum([
-        maximum(filter(!isnan, df_meas_res.Res1)), 
-        maximum(filter(!isnan, df_meas_res.Res2)), 
-        maximum(filter(!isnan, df_meas_res.Res3))
-    ])
-
-    # Define color intervals
-    num_intervals = 6
-
-    lowerBounds = [[min_val + i * (0.01 - min_val) / 3 for i in 0:3]..., 1e-1, 1]
-    uppoerBounds = [[0.00333332833981672 + i * (0.1 - 0.00333332833981672) / 3 for i in 0:3]..., 1, max_val+1e-6]
-
-
-    colors = [crayon"green bold", crayon"cyan bold", crayon"blue bold", crayon"magenta bold", crayon"yellow bold", crayon"red bold"]
-
-
-    # Create highlighters for each interval
-    highlighters = []
-    for i in 1:num_intervals
-        lower_bound = lowerBounds[i]
-        upper_bound = uppoerBounds[i]
-        push!(highlighters, Highlighter(
-            (data, row, col) -> col in 2:4 && data[row, col] >= lower_bound && data[row, col] < upper_bound,
-            colors[i]
-        ))
-    end
-    hideNan_hl = Highlighter(       
-        (data, i, j) -> (j ∈ collect(2:4) && isnan(data[i,j])),
-        crayon"dark_gray conceal"
-        );
-    push!(highlighters, hideNan_hl);
-
-    # Define headers
-    header = ["Meas", "Res1", "Res2", "Res3"]
-    res_heatmap = pretty_table(df_meas_res, header=header, header_crayon=crayon"fg:yellow", highlighters=Tuple(highlighters), tf=tf_unicode)
-
-    df_legend = DataFrame(
-        Lower_Bound = lowerBounds,
-        Upper_Bound = uppoerBounds,
-    )
-
-    legend_highlighters = []
-    for i in 1:num_intervals
-        push!(legend_highlighters, Highlighter(
-            (data, row, col) -> (row == i),
-            colors[i]
-        ))
-    end
-    println("Legend:")
-    legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters= Tuple(legend_highlighters), tf=tf_unicode)
-
-    display(res_heatmap)
-    println(legend)
-
-end
-
 #TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
 function viz_residuals(SE_en, math_en)
 
@@ -113,12 +14,12 @@ function viz_residuals(SE_en, math_en)
         math_en["meas"][m]["res"] = meas["res"]
     end
 
-
     # Extracting values into a DataFrame for visualization
     rows = String[]
     res1 = Float64[]
     res2 = Float64[]
     res3 = Float64[]
+    res4 = Float64[]
 
     for (key, value) in math_en["meas"]
         cmp = value["cmp"]
@@ -131,32 +32,27 @@ function viz_residuals(SE_en, math_en)
         push!(res1, get(res_values, 1, NaN))
         push!(res2, get(res_values, 2, NaN))
         push!(res3, get(res_values, 3, NaN))
+        push!(res4, get(res_values, 4, NaN))
     end
 
-    df_meas_res = DataFrame(Meas = rows, Res1 = res1, Res2 = res2, Res3 = res3)
+    df_meas_res = DataFrame(Meas = rows, Res1 = res1, Res2 = res2, Res3 = res3, Res4 = res4)
     sort!(df_meas_res, :Meas)
 
-    min_val = minimum([
-        minimum(filter(!isnan, df_meas_res.Res1)), 
-        minimum(filter(!isnan, df_meas_res.Res2)), 
-        minimum(filter(!isnan, df_meas_res.Res3))
-    ])
+    # Handle empty collections for minimum and maximum calculations
+    non_nan_res1 = filter(!isnan, df_meas_res.Res1)
+    non_nan_res2 = filter(!isnan, df_meas_res.Res2)
+    non_nan_res3 = filter(!isnan, df_meas_res.Res3)
+    non_nan_res4 = filter(!isnan, df_meas_res.Res4)
 
-    max_val = maximum([
-        maximum(filter(!isnan, df_meas_res.Res1)), 
-        maximum(filter(!isnan, df_meas_res.Res2)), 
-        maximum(filter(!isnan, df_meas_res.Res3))
-    ])
+    min_val = minimum(vcat(non_nan_res1, non_nan_res2, non_nan_res3, non_nan_res4))
+    max_val = maximum(vcat(non_nan_res1, non_nan_res2, non_nan_res3, non_nan_res4))
 
     # Define color intervals
     num_intervals = 6
-
     lowerBounds = [[min_val + i * (0.01 - min_val) / 3 for i in 0:3]..., 1e-1, 1]
-    uppoerBounds = [[0.00333332833981672 + i * (0.1 - 0.00333332833981672) / 3 for i in 0:3]..., 1, max_val+1e-6]
-
+    uppoerBounds = [[0.00333332833981672 + i * (0.1 - 0.00333332833981672) / 3 for i in 0:3]..., 1, max_val + 1e-6]
 
     colors = [crayon"green bold", crayon"cyan bold", crayon"blue bold", crayon"magenta bold", crayon"yellow bold", crayon"red bold"]
-
 
     # Create highlighters for each interval
     highlighters = []
@@ -164,18 +60,18 @@ function viz_residuals(SE_en, math_en)
         lower_bound = lowerBounds[i]
         upper_bound = uppoerBounds[i]
         push!(highlighters, Highlighter(
-            (data, row, col) -> col in 2:4 && data[row, col] >= lower_bound && data[row, col] < upper_bound,
+            (data, row, col) -> col in 2:5 && data[row, col] >= lower_bound && data[row, col] < upper_bound,
             colors[i]
         ))
     end
     hideNan_hl = Highlighter(       
-        (data, i, j) -> (j ∈ collect(2:4) && isnan(data[i,j])),
+        (data, i, j) -> (j ∈ collect(2:5) && isnan(data[i, j])),
         crayon"dark_gray conceal"
-        );
-    push!(highlighters, hideNan_hl);
+    )
+    push!(highlighters, hideNan_hl)
 
     # Define headers
-    header = ["Meas", "Res1", "Res2", "Res3"]
+    header = ["Meas", "Res1", "Res2", "Res3", "Res4"]
     res_heatmap = pretty_table(df_meas_res, header=header, header_crayon=crayon"fg:yellow", highlighters=Tuple(highlighters), tf=tf_unicode)
 
     df_legend = DataFrame(
@@ -191,7 +87,7 @@ function viz_residuals(SE_en, math_en)
         ))
     end
     println("Legend:")
-    legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters= Tuple(legend_highlighters), tf=tf_unicode)
+    legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=Tuple(legend_highlighters), tf=tf_unicode)
 
     display(res_heatmap)
     println(legend)
@@ -358,6 +254,13 @@ function math_meas_table(math::Dict{String, Any}, condition::Function; se_sol= n
 end
 
 
+function write_sm_measurements(PF_RES, math, measurements_file; σ=0.05)
+    dictify_solution!(PF_RES["solution"], math)
+    math_meas_en = add_vmn_p_q(math, PF_RES["solution"])
+    write_measurements!(PowerModelsDistributionStateEstimation.IndustrialENMeasurementsModel, math_meas_en, PF_RES, measurements_file, σ=σ) 
+end
+
+
 function add_pd_qd_vmn!(SE_RES::Dict{String, Any}, math::Dict{String, Any})
     for (l, lo) in SE_RES["solution"]["load"]
         load_bus = math["load"][l]["load_bus"]
@@ -412,8 +315,8 @@ each bus and terminal, filters out any `NaN` values, and computes the mean APE.
 """
 function _calculate_MAPE(SE_RES, PF_RES, math)
 
-    se_sol  = SE_RES["solution"]
-    pf_sol = PF_RES["solution"]
+    se_sol  = deepcopy(SE_RES["solution"])
+    pf_sol = deepcopy(PF_RES["solution"])
 
     dictify_solution!(pf_sol, math)
     dictify_solution!(se_sol, math)
@@ -425,7 +328,10 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
     APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
     for (b,bus) in se_sol["bus"]
 
-        for (term,Vse) in bus["voltage"]
+        for (term,Vse) in bus["voltage"] 
+            if term == "4"
+                continue
+            end
             # println("Bus    :",b)
             # println("Term   :",term)
             # println("Vse   :",Vse)

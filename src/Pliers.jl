@@ -37,7 +37,7 @@ using MetaGraphs
 
 # Power Distribution Tools
 using PowerModelsDistribution
-#using PowerModelsDistributionStateEstimation
+using PowerModelsDistributionStateEstimation
 using Ipopt
 
 # pkg const
