@@ -113,10 +113,19 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
     # The current is calculated as `I = P + Q*im` and the power is calculated as `S = P + Q*im`  
     for (l, load) in pf_sol["load"]
         terminals = math["load"][l]["connections"]
-        # write a dictionary where the key is the terminal number and the value is the current at that terminal
-        load["current"] = haskey(load,"crd_bus") ? Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals)) : Dict(string(term) => load["crd"][i] + load["cid"][i]*im for (i, term) in enumerate(terminals)) 
-        haskey(load, "pd") || haskey(load, "pd_bus") ? load["power"] =  haskey(load,"pd_bus") ?  Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals)) :  Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))  : nothing
-    end
+        # Create current dictionary based on available keys
+        if haskey(load, "crd_bus") && haskey(load, "cid_bus")
+            load["current"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
+        elseif haskey(load, "crd") && haskey(load, "cid")
+            load["current"] = Dict(string(term) => load["crd"][i] + load["cid"][i]*im for (i, term) in enumerate(terminals))
+        end
+
+        # Create power dictionary based on available keys
+        if haskey(load, "pd_bus") && haskey(load, "qd_bus")
+            load["power"] = Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals))
+        elseif haskey(load, "pd") && haskey(load, "qd")
+            load["power"] = Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))
+        end  end
 end 
 
 function solution_dictify_branches!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
@@ -247,8 +256,35 @@ function add_vmn_p_q(math, pf_sol)
     math_meas = deepcopy(math)
     _get_vmn(pf_sol, math, math_meas)
     _get_pd_qd(pf_sol, math, math_meas)
+    write_delta_readings(pf_sol, math, math_meas)
     return math_meas
 end
+
+
+
+function write_delta_readings(pf_sol, math, math_meas)
+
+    # for (b,bus) in pf_sol["bus"]
+    #     bus["vmn2"] = []
+    #     for t in setdiff(math["bus"][b]["terminals"],[4])
+    #         push!(bus["vmn2"], (bus["vr"][t] - bus["vr"][4])^2 + (bus["vi"][t] - bus["vi"][4])^2)
+    #     end
+    #     bus["vmn"] = sqrt.(bus["vmn2"])
+    # math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], 4)
+    # end 
+
+    for (l, load) in math["load"]
+        if load["configuration"] == DELTA
+            pf_sol["load"][l]["ptot"] = [sum(pf_sol["load"][l]["pd"])]
+            pf_sol["load"][l]["qtot"] = [sum(pf_sol["load"][l]["qd"])]
+
+            load_bus = pf_sol["bus"][string(load["load_bus"])]
+            load_bus["vll"] = sqrt.([ (load_bus["vr"][x] - load_bus["vr"][y] )^2 + (load_bus["vi"][x] - load_bus["vi"][y] )^2 for (x,y) in [(1,2), (2,3), (3,1)]])
+        end
+    end
+return math_meas
+end
+
 
 function ptot_qtot_from_loads(math, pf_sol)
     ptot = 0.0
@@ -260,7 +296,7 @@ function ptot_qtot_from_loads(math, pf_sol)
     return ptot, qtot
 end
 
-function write_delta_readings(math, pf_sol)
+function write_delta_readings(pf_sol,math)
     math_meas = deepcopy(math)
 
     for (b,bus) in pf_sol["bus"]
