@@ -29,7 +29,7 @@ A tuple containing:
 # Example
 """
 function calc_bases_from_dict(data::Dict{String,Any})
-    is_perunit = data["data_model"] == PowerModelsDistribution.ENGINEERING ?  true : data["per_unit"]
+    is_perunit = haskey(data, "per_unit") ? data["per_unit"] : false
     vbase_V = first(data["settings"]["vbases_default"]).second*data["settings"]["voltage_scale_factor"]
     sbase_VA = data["settings"]["sbase_default"]*data["settings"]["power_scale_factor"]
     Zbase_Ω = vbase_V^2/sbase_VA

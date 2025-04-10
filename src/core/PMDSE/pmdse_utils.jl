@@ -353,6 +353,6 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
     
     APEs_nonan = filter(x -> !isnan(x), APEs)
     mean_APE = mean(APEs_nonan)
-    return mean_APE, APEs_df, Errors_df
+    return mean_APE, APEs, Errors
 
 end
