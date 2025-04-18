@@ -2,39 +2,73 @@
 The Idea here is to get the results dictionary of PMD power flow or optimal power flow and then match it with eng files.
 =#
 
-
 """
-    calc_bases_from_dict(data::Dict{String,Any}) -> Tuple{Bool, Float64, Float64, Float64, Float64}
+calc_bases_from_dict(data::Dict{String,Any}; return_dict=false)
 
 Calculate electrical base quantities from a data dictionary.
 
 # Arguments
-- `data::Dict{String,Any}`: A dictionary containing network data (eng, math or pf_sol are all). 
-  It must include the following keys:
-  - `"per_unit"`: A boolean indicating whether the values are in per-unit.
-  - `"settings"`: A nested dictionary with the following keys:
-    - `"vbases_default"`: A collection where the first element has a `second` field representing the base voltage in volts.
-    - `"voltage_scale_factor"`: A scaling factor for voltage.
-    - `"sbase_default"`: The default base apparent power in VA.
-    - `"power_scale_factor"`: A scaling factor for power.
+- `data::Dict{String,Any}`: A dictionary containing network data. It must include:
+    - `"per_unit"`: (optional) A boolean indicating whether the values are in per-unit.
+    - `"settings"`: A nested dictionary with the following keys:
+        - `"vbases_default"`: A collection where the first element has a `second` field representing the base voltage in volts.
+        - `"voltage_scale_factor"`: A scaling factor for voltage.
+        - `"sbase_default"`: The default base apparent power in VA.
+        - `"power_scale_factor"`: A scaling factor for power.
+- `return_dict::Bool=false`: If `true`, returns a dictionary of base quantities; otherwise, returns a tuple.
 
 # Returns
-A tuple containing:
+If `return_dict == false`, returns a tuple:
 1. `is_perunit::Bool`: Indicates if the values are in per-unit.
-2. `vbase_V::Float64`: The base voltage in volts.
+2. `vbase_V::Float64`: The base voltage in volts (phase-to-neutral).
 3. `sbase_VA::Float64`: The base apparent power in volt-amperes.
 4. `Zbase_Ω::Float64`: The base impedance in ohms.
-5. `Ibase_A::Float64`: The base current in amperes.
+5. `Ibase_A::Float64`: The base current in amperes (phase current).
+6. `vbase_ll::Float64`: The base line-to-line voltage in volts.
+7. `Ibase_A_ll::Float64`: The base line current in amperes.
+8. `Ibase_A_ϕ::Float64`: The base phase current in amperes.
+
+If `return_dict == true`, returns a `Dict{String,Any}` with the following keys:
+- `"is_perunit"`
+- `"vbase_V"`
+- `"sbase_VA"`
+- `"Zbase_Ω"`
+- `"Ibase_A"`
+- `"vbase_ll"`
+- `"Ibase_A_ll"`
+- `"Ibase_A_ϕ"`
 
 # Example
+- is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ = calc_bases_from_dict(data)
+- bases = calc_bases_from_dict(data; return_dict=true)
 """
-function calc_bases_from_dict(data::Dict{String,Any})
+function calc_bases_from_dict(data::Dict{String,Any}; return_dict = false)   
+    
+
     is_perunit = haskey(data, "per_unit") ? data["per_unit"] : false
     vbase_V = first(data["settings"]["vbases_default"]).second*data["settings"]["voltage_scale_factor"]
+    vbase_ll = vbase_V*sqrt(3)
     sbase_VA = data["settings"]["sbase_default"]*data["settings"]["power_scale_factor"]
-    Zbase_Ω = vbase_V^2/sbase_VA
+    Zbase_Ω = vbase_ll^2/sbase_VA
     Ibase_A = sbase_VA/vbase_V
-    return is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A
+
+    Ibase_A_ll = sbase_VA/(sqrt(3)*vbase_ll)
+    Ibase_A_ϕ = sbase_VA/(3*vbase_V)
+
+    if return_dict
+        bases = Dict()
+        bases["is_perunit"] = is_perunit
+        bases["vbase_V"] = vbase_V
+        bases["sbase_VA"] = sbase_VA
+        bases["Zbase_Ω"] = Zbase_Ω
+        bases["Ibase_A"] = Ibase_A
+        bases["vbase_ll"] = vbase_ll
+        bases["Ibase_A_ll"] = Ibase_A_ll
+        bases["Ibase_A_ϕ"] = Ibase_A_ϕ
+        return bases
+    end
+
+    return is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ
 end
 
 
@@ -416,19 +450,17 @@ end
 # A phasor plotter 
 
 
-function bus_phasor(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false, makie_backend=WGLMakie,
+function bus_phasor(eng::Dict{String, Any}, bus_id::String;
+     keep_pu::Bool= false,
+     makie_backend=WGLMakie,
+     fig_size = (800, 1000),
     )
-    vbase_V = eng["bases"]["vbase_V"]
-    
-    # V = bus["V"]*vbase_V
-    # Vm = abs.(V)
-    # θ = rad2deg.(angle.(V)) 
-
+    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(eng)
+    @show vbase_V
     makie_backend.activate!()
+    f = Figure(size=fig_size)
 
-    f = Figure(size=(800, 1200))
-
-    colors = [:red, :green, :blue, :black]
+    colors = [:darkred, :darkgreen, :darkblue, :black]
 
     ax = PolarAxis(f[1,1], title = "Bus $bus_id Phasors", thetaticks = Makie.AngularTicks(180 / pi, "°"))
     div = 50
@@ -440,9 +472,9 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false
     bus = eng["bus"][bus_id]
     for (i, color) in enumerate(colors)
         
-        if haskey(bus["V"], string(i))
-            V = bus["V"][string(i)]
-            V = bus["V"][string(i)]
+        if haskey(bus["voltage"], string(i))
+            V = bus["voltage"][string(i)]
+            V = bus["voltage"][string(i)]
             Vm = abs(V)*vbase_V
             θ = angle(V)
             lines!(ax, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
@@ -465,55 +497,6 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false
 end
 
 
-function bus_phasor!(eng::Dict{String, Any}, bus_id::String, f; keep_pu::Bool= false, makie_backend=WGLMakie,
-    )
-    vbase_V = eng["bases"]["vbase_V"]
-    
-    # V = bus["V"]*vbase_V
-    # Vm = abs.(V)
-    # θ = rad2deg.(angle.(V)) 
-
-    makie_backend.activate!()
-
-    #f = Figure(size=(800, 1200))
-
-    colors = [:red, :green, :blue, :black]
-
-    ax = f[1,1]
-    axN = f[2, 1]
-    #ax = PolarAxis(f[1,1], title = "Bus $bus_id Phasors", thetaticks = Makie.AngularTicks(180 / pi, "°"))
-    div = 50
-   # axa = PolarAxis(f[2, 1], title = "thetalimits", thetalimits = (-pi/div, pi/div))
-   # axb = PolarAxis(f[3, 1], title = "thetalimits", thetalimits = (-2pi/3 - pi/div , -2pi/3 + pi/div))
-   # axc = PolarAxis(f[4, 1], title = "thetalimits", thetalimits = (2pi/3 - pi/div , 2pi/3 + pi/div))
-   #axN = PolarAxis(f[2, 1], title = "Neutral Phasor")
-
-    bus = eng["bus"][bus_id]
-    for (i, color) in enumerate(colors)
-        
-        if haskey(bus["V"], string(i))
-            V = bus["V"][string(i)]
-            V = bus["V"][string(i)]
-            Vm = abs(V)*vbase_V
-            θ = angle(V)
-            lines!(ax, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            # lines!(axa, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            # lines!(axb, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            # lines!(axc, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            if i == 4
-                  lines!(axN, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid) 
-            end 
-        
-        else
-            V = 0
-            Vm = 0
-            θ = 0
-        end
-
-    end
-
-    return f 
-end
 
 function line_current_phasor(eng::Dict{String, Any}, line_id::String; keep_pu::Bool= false, makie_backend=WGLMakie,
     )

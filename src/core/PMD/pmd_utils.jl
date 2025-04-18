@@ -100,10 +100,10 @@ function solution_dictify_buses!(pf_sol::Dict{String, Any}, math::Dict{String, A
     fluff_bus_voltages!(pf_sol)
     pf_sol = haskey(pf_sol,"solution") ? pf_sol["solution"] : pf_sol
 
-    for (b, bus) in pf_sol["bus"]
+    for (b, bus) in math["bus"]
         terminals = math["bus"][b]["terminals"]
         # write a dictionary where the key is the terminal number and the value is the voltage at that terminal
-        bus["voltage"] = Dict(string(term) => bus["V"][i] for (i, term) in enumerate(terminals))
+        pf_sol["bus"][b]["voltage"] = Dict(string(term) =>  pf_sol["bus"][b]["V"][i] for (i, term) in enumerate(terminals))
     end 
 
 end
@@ -126,10 +126,10 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
             # Create power dictionary based on available keys
             if haskey(load, "pd_bus") && haskey(load, "qd_bus")
                 load["power"] = Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals))
-                @info "added bus powers"
+                @debug "added bus powers"
             elseif haskey(load, "pd") && haskey(load, "qd")
                 load["power"] = Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))
-                @info "added load powers"
+                @debug "added load powers"
             end  
         else
             terminals = setdiff(terminals, _N_IDX)
@@ -144,11 +144,11 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
                 # Create power dictionary based on available keys
                 if haskey(load, "pd_bus") && haskey(load, "qd_bus")
                     load["power_bus"] = Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals))
-                    @info "DELTA: added bus powers"
+                    @debug "DELTA: added bus powers"
                 end
                 if haskey(load, "pd") && haskey(load, "qd")
                     load["power"] = Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))
-                    @info "DELTA: added load powers"
+                    @debug "DELTA: added load powers"
                 end  
         end
 
@@ -158,10 +158,11 @@ end
 function solution_dictify_branches!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
     # The idea is to create the complex current and power for each branch and store it in the branch dictionary under the key "current" and "power" respectively.
     # The current is calculated as `I = P + Q*im` and the power is calculated as `S = P + Q*im`  
-    for (b, branch) in pf_sol["branch"]
+    for (b, branch) in math["branch"]
         f_terminals = math["branch"][b]["f_connections"]
         t_terminals = math["branch"][b]["t_connections"]
         # write a dictionary where the key is the terminal number and the value is the current at that terminal
+        branch = pf_sol["branch"][b]
         branch["current_from"] = Dict(string(term) => branch["cr_fr"][i] + branch["ci_fr"][i]*im for (i, term) in enumerate(f_terminals))
         haskey(branch, "csr_fr") ? branch["shunt_current_from"] = Dict(string(term) => branch["csr_fr"][i] + branch["csi_fr"][i]*im for (i, term) in enumerate(f_terminals)) : nothing
         branch["current_to"] = Dict(string(term) => branch["cr_to"][i] + branch["ci_to"][i]*im for (i, term) in enumerate(t_terminals))
@@ -294,6 +295,10 @@ function _add_delta_readings(pf_sol, math, math_meas)
         if load["configuration"] == DELTA
             pf_sol["load"][l]["ptot"] = [sum(real(value) for (key, value) in pf_sol["load"][l]["power"])]
             pf_sol["load"][l]["qtot"] = [sum(imag(value) for (key, value) in pf_sol["load"][l]["power"])]
+            
+            #pf_sol["load"][l]["ptot"] = [sum(real(value) for (key, value) in pf_sol["load"][l]["power_bus"])]
+            #pf_sol["load"][l]["qtot"] = [sum(imag(value) for (key, value) in pf_sol["load"][l]["power_bus"])]
+
 
             load_bus = pf_sol["bus"][string(load["load_bus"])]
             load_bus["vll"] = sqrt.([ (load_bus["vr"][x] - load_bus["vr"][y] )^2 + (load_bus["vi"][x] - load_bus["vi"][y] )^2 for (x,y) in [(1,2), (2,3), (3,1)]])

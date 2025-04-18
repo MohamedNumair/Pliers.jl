@@ -1,14 +1,13 @@
 #TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
-function viz_residuals(SE_en, math_en)
+function viz_residuals(SE_en, math_en; show_legend = false)
 
     se_sol_en = SE_en["solution"]
         
     printstyled(" %%%%%%%%%%%%%%%%%% STATS %%%%%%%%%%%%%%%%%% \n", color=:blue, underline = true)
     printstyled(" Solve time : $(SE_en["solve_time"]) \n", color=:green)
     printstyled(" objective : $(SE_en["objective"]) \n", color=:green)
-    printstyled(" termination : $(SE_en["termination_status"]) \n", color=:green)
-    printstyled(" primal : $(SE_en["primal_status"]) \n", color=:green)
-
+    string(SE_en["termination_status"]) == "LOCALLY_SOLVED" ? printstyled(" termination : $(SE_en["termination_status"]) \n", color=:green) : printstyled(" termination : $(SE_en["termination_status"]) \n", color=:red)
+    string(SE_en["primal_status"]) == "FEASIBLE_POINT" ? printstyled(" primal : $(SE_en["primal_status"]) \n", color=:green) : printstyled(" primal : $(SE_en["primal_status"]) \n", color=:red)
     # Merge residuals with meas
     for (m, meas) in se_sol_en["meas"]
         math_en["meas"][m]["res"] = meas["res"]
@@ -86,11 +85,11 @@ function viz_residuals(SE_en, math_en)
             colors[i]
         ))
     end
-    println("Legend:")
-    legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=Tuple(legend_highlighters), tf=tf_unicode)
-
-    display(res_heatmap)
-    println(legend)
+    if show_legend
+        println("Legend:") 
+        legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=Tuple(legend_highlighters), tf=tf_unicode)
+        println(legend)
+    end
 
 end
 
@@ -254,10 +253,10 @@ function math_meas_table(math::Dict{String, Any}, condition::Function; se_sol= n
 end
 
 
-function write_sm_measurements(PF_RES, math, measurements_file; σ=0.05)
+function write_sm_measurements(PF_RES, math, measurements_file; σ=0.05, measurement_model =PowerModelsDistributionStateEstimation.IndustrialENMeasurementsModel )
     dictify_solution!(PF_RES["solution"], math)
     math_meas_en = add_vmn_p_q(math, PF_RES["solution"])
-    write_measurements!(PowerModelsDistributionStateEstimation.IndustrialENMeasurementsModel, math_meas_en, PF_RES, measurements_file, σ=σ) 
+    write_measurements!(measurement_model, math_meas_en, PF_RES, measurements_file, σ=σ) 
 end
 
 
@@ -353,6 +352,6 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
     
     APEs_nonan = filter(x -> !isnan(x), APEs)
     mean_APE = mean(APEs_nonan)
-    return mean_APE, APEs, Errors
+    return mean_APE, APEs_df, Errors_df
 
 end
