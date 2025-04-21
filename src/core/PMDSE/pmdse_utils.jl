@@ -1,13 +1,49 @@
+
+function get_m_n_dof(data::Dict)
+
+    ref_bus = [bus for (_,bus) in data["bus"] if bus["bus_type"] == 3]
+    
+    @assert length(ref_bus) == 1 "There is more than one reference bus, double-check model"
+    
+    load_buses = ["$(load["load_bus"])" for (_, load) in data["load"]] # buses with demand (incl. negative demand, i.e., generation passed as negative load)
+    gen_slack_buses = ["$(gen["gen_bus"])" for (_, gen) in data["gen"]] # buses with generators, including the slackbus
+    non_zero_inj_buses = unique(vcat(load_buses, gen_slack_buses))
+    
+    @assert !isempty(non_zero_inj_buses) "This network has no active connected component, no point doing state estimation"
+    
+    n = sum([length(setdiff(bus["terminals"],_N_IDX)) for (b, bus) in data["bus"] if b ∈ non_zero_inj_buses ])*2-length(setdiff(ref_bus[1]["terminals"],_N_IDX)) # system variables: two variables per bus (e.g., angle and magnitude) per number of phases on the bus minus the angle variable(s) of a ref bus, which are fixed
+    #n = sum([length(bus["terminals"]) for (b, bus) in data["bus"] if b ∈ non_zero_inj_buses ])*2-length(ref_bus[1]["terminals"]) # system variables: two variables per bus (e.g., angle and magnitude) per number of phases on the bus minus the angle variable(s) of a ref bus, which are fixed
+    #@show n
+    m = sum([length(meas["dst"]) for (_, meas) in data["meas"]])
+    #@show m
+    m-n > 0 ? nothing : warning_text("system underdetermined or just barely determined")
+    
+    return m, n, m-n
+
+end
+
+
 #TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
-function viz_residuals(SE_en, math_en; show_legend = false)
+function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing)
 
     se_sol_en = SE_en["solution"]
-        
+    solve_time = SE_en["solve_time"]
+    objective = SE_en["objective"]
+    termination_status = SE_en["termination_status"]
+    primal_status = SE_en["primal_status"]
+    
+
     printstyled(" %%%%%%%%%%%%%%%%%% STATS %%%%%%%%%%%%%%%%%% \n", color=:blue, underline = true)
-    printstyled(" Solve time : $(SE_en["solve_time"]) \n", color=:green)
-    printstyled(" objective : $(SE_en["objective"]) \n", color=:green)
-    string(SE_en["termination_status"]) == "LOCALLY_SOLVED" ? printstyled(" termination : $(SE_en["termination_status"]) \n", color=:green) : printstyled(" termination : $(SE_en["termination_status"]) \n", color=:red)
-    string(SE_en["primal_status"]) == "FEASIBLE_POINT" ? printstyled(" primal : $(SE_en["primal_status"]) \n", color=:green) : printstyled(" primal : $(SE_en["primal_status"]) \n", color=:red)
+    printstyled(" Solve time : $(solve_time) \n", color=:green)
+    isapprox(objective, 0, atol = 0.05) ? printstyled(" objective : $(objective) \n", color=:green) : printstyled(" objective : $(objective) \n", color=:red)
+    string(termination_status) == "LOCALLY_SOLVED" ? printstyled(" termination : $(termination_status) \n", color=:green) : printstyled(" termination : $(termination_status) \n", color=:red)
+    string(primal_status) == "FEASIBLE_POINT" ? printstyled(" primal : $(primal_status) \n", color=:green) : printstyled(" primal : $(primal_status) \n", color=:red)
+    !isnothing(mape) ? isapprox(mape, 0, atol=0.05)  ? printstyled(" MAPE : $(mape) \n", color=:green) : printstyled(" MAPE : $(mape) \n", color=:red) : nothing
+    m,n, dof = get_m_n_dof(math_en)
+    printstyled(" m : $(m) \n", color=:green)
+    printstyled(" n : $(n) \n", color=:green)
+    dof > 0 ? printstyled(" Degrees of freedom : $(dof) \n", color=:green) : printstyled(" Degrees of freedom : $(dof) \n", color=:red)
+    
     # Merge residuals with meas
     for (m, meas) in se_sol_en["meas"]
         math_en["meas"][m]["res"] = meas["res"]
@@ -91,7 +127,18 @@ function viz_residuals(SE_en, math_en; show_legend = false)
         println(legend)
     end
 
+
+    return solve_time, objective, termination_status, primal_status, mape, m, n, dof
+
 end
+
+function viz_residuals(SE_en, math_en, PF_en; show_legend=false)
+
+    MAPE, _, _ = Pliers._calculate_MAPE(SE_en, PF_en, math_en)
+    viz_residuals(SE_en, math_en; show_legend = show_legend, mape = MAPE)
+
+end
+
 
 
 function df_meas_res(SE_en, math_en)
