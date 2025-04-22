@@ -2,6 +2,7 @@
 The Idea here is to get the results dictionary of PMD power flow or optimal power flow and then match it with eng files.
 =#
 
+
 """
 calc_bases_from_dict(data::Dict{String,Any}; return_dict=false)
 
@@ -222,9 +223,6 @@ end
 
 
 
-
-
-
 function pf_results_buses(pf_sol::Dict{String, Any}, math; keep_pu::Bool)
     is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(pf_sol)
     header("Buses Results")
@@ -269,18 +267,11 @@ end
 
 
 
-
-
-
 function bus_res(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false, makie_backend=WGLMakie,
     )
     is_perunit = eng["bases"]["is_perunit"]
     vbase_V = eng["bases"]["vbase_V"]
     
-    # sbase_VA = eng["bases"]["sbase_VA"]
-    # Zbase_Ω = eng["bases"]["Zbase_Ω"]
-    # Ibase_A = eng["bases"]["Ibase_A"]
-
     bus = eng["bus"][bus_id]
 
     if keep_pu*is_perunit
@@ -296,12 +287,8 @@ function bus_res(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false, m
 
     makie_backend.activate!()
 
-
-
     return V, Vm, θ
 end
-
-
 
 
 
@@ -447,53 +434,78 @@ function plot_voltage_profile(eng_res; size = (800, 1000), phase = nothing)
 end
 
 
-# A phasor plotter 
+# A phasor plotter
+
+"""
+    bus_phasor!(ax::PolarAxis, eng::Dict{String, Any}, bus_id::String;
+                linestyle=:solid, colors=[:darkred, :darkgreen, :darkblue, :black])
+
+Plots voltage phasors for a given bus onto an existing `PolarAxis`.
+
+# Arguments
+- `ax::PolarAxis`: The Makie PolarAxis to plot on.
+- `eng::Dict{String, Any}`: The engineering data dictionary containing results.
+- `bus_id::String`: The ID of the bus to plot phasors for.
+- `linestyle`: The line style for the phasors (default: `:solid`).
+- `colors`: The colors to use for the different phases (default: `[:darkred, :darkgreen, :darkblue, :black]`).
+"""
+function bus_phasor!(ax::PolarAxis, eng::Dict{String, Any}, bus_id::Integer;
+                     linestyle=:solid, colors=[:darkred, :darkgreen, :darkblue, :black])
+
+    # Extract base voltage - assuming results are not in per unit based on original logic
+    #is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(eng)
+    bus_id = string(bus_id)
+    bus = eng["bus"][bus_id]
+
+    for (i, color) in enumerate(colors)
+        phase_key = string(i)
+        
+        if haskey(bus["voltage"], phase_key)
+            V_complex = bus["voltage"][phase_key]
+            Vm = abs(V_complex) # * vbase_V
+            θ = angle(V_complex)
+            lines!(ax, [0, θ], [0, Vm], color=color, linewidth=2, linestyle=linestyle)
+        end
+    end
+    return ax
+end
 
 
-function bus_phasor(eng::Dict{String, Any}, bus_id::String;
-     keep_pu::Bool= false,
-     makie_backend=WGLMakie,
-     fig_size = (800, 1000),
-    )
-    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(eng)
-    @show vbase_V
+"""
+    bus_phasor(eng::Dict{String, Any}, bus_id::String;
+               makie_backend=WGLMakie, fig_size=(800, 800))
+
+Creates a new figure and plots voltage phasors for a given bus.
+
+# Arguments
+- `eng::Dict{String, Any}`: The engineering data dictionary containing results.
+- `bus_id::String`: The ID of the bus to plot phasors for.
+- `makie_backend`: The Makie backend to activate (default: `WGLMakie`).
+- `fig_size`: The size of the figure (default: `(800, 800)`).
+
+# Returns
+- `Figure`: The Makie figure containing the phasor plot.
+"""
+function bus_phasor(eng::Dict{String, Any}, bus_id::Integer;
+                    makie_backend=WGLMakie,
+                    fig_size=(800, 800)
+                   )
+
     makie_backend.activate!()
     f = Figure(size=fig_size)
 
-    colors = [:darkred, :darkgreen, :darkblue, :black]
+    degree_ticks = 0:30:330
+    radian_ticks = deg2rad.(degree_ticks)
+    tick_labels = ["$(d)°" for d in degree_ticks]
 
-    ax = PolarAxis(f[1,1], title = "Bus $bus_id Phasors", thetaticks = Makie.AngularTicks(180 / pi, "°"))
-    div = 50
-   # axa = PolarAxis(f[2, 1], title = "thetalimits", thetalimits = (-pi/div, pi/div))
-   # axb = PolarAxis(f[3, 1], title = "thetalimits", thetalimits = (-2pi/3 - pi/div , -2pi/3 + pi/div))
-   # axc = PolarAxis(f[4, 1], title = "thetalimits", thetalimits = (2pi/3 - pi/div , 2pi/3 + pi/div))
-   axN = PolarAxis(f[2, 1], title = "Neutral Phasor")
+    ax = PolarAxis(f[1, 1],
+                   title="Bus $bus_id Phasors",
+                   thetaticks=(radian_ticks, tick_labels)
+                  )
 
-    bus = eng["bus"][bus_id]
-    for (i, color) in enumerate(colors)
-        
-        if haskey(bus["voltage"], string(i))
-            V = bus["voltage"][string(i)]
-            V = bus["voltage"][string(i)]
-            Vm = abs(V)*vbase_V
-            θ = angle(V)
-            lines!(ax, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            # lines!(axa, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            # lines!(axb, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            # lines!(axc, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-            if i == 4
-                  lines!(axN, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid) 
-            end 
-        
-        else
-            V = 0
-            Vm = 0
-            θ = 0
-        end
+    bus_phasor!(ax, eng, bus_id)
 
-    end
-
-    return f 
+    return f, ax
 end
 
 
@@ -501,37 +513,31 @@ end
 function line_current_phasor(eng::Dict{String, Any}, line_id::String; keep_pu::Bool= false, makie_backend=WGLMakie,
     )
     Ibase_A = eng["bases"]["Ibase_A"]
-    
+
     makie_backend.activate!()
 
-    f = Figure(size=(800, 1200), title= "Current Phasors for line $line_id")
+    f = Figure(size=(800, 1200))
 
     colors = [:red, :green, :blue, :black]
 
-    ax = PolarAxis(f[1,1], title = "Line $line_id Current Phasors", thetaticks = Makie.AngularTicks(180 / pi, "°"))
-    div = 50
-   # axa = PolarAxis(f[2, 1], title = "thetalimits", thetalimits = (-pi/div, pi/div))
-   # axb = PolarAxis(f[3, 1], title = "thetalimits", thetalimits = (-2pi/3 - pi/div , -2pi/3 + pi/div))
-   # axc = PolarAxis(f[4, 1], title = "thetalimits", thetalimits = (2pi/3 - pi/div , 2pi/3 + pi/div))
+    degree_ticks = 0:30:330
+    radian_ticks = deg2rad.(degree_ticks)
+    tick_labels = ["$(d)°" for d in degree_ticks]
+
+    ax = PolarAxis(f[1,1],
+                   title = "Line $line_id Current Phasors (From Bus)",
+                   thetaticks = (radian_ticks, tick_labels)
+                  )
 
     line = eng["line"][line_id]
     for (i, color) in enumerate(colors)
-        
-        if haskey(line["I_f"], string(i))
-            I = line["I_f"][string(i)]
-            Im = abs(I)*Ibase_A
-            θ = angle(I)
+        phase_key = string(i)
+        if haskey(line["I_f"], phase_key)
+            I_complex = line["I_f"][phase_key]
+            Im = abs(I_complex) * Ibase_A
+            θ = angle(I_complex)
             lines!(ax, [0,θ], [0,Im], color = color, linewidth = 2, linestyle = :solid)
-           # lines!(axa, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-           # lines!(axb, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-           # lines!(axc, [0,θ], [0,Vm], color = color, linewidth = 2, linestyle = :solid)
-        
-        else
-            I = 0
-            Im = 0
-            θ = 0
         end
-
     end
 
     return f 

@@ -5,7 +5,7 @@ module Pliers
 using DataFrames
 using CSV
 using FileIO
-
+using Serialization
 # pretty terminal packages
 using Crayons
 using Crayons.Box
@@ -15,7 +15,9 @@ using PrettyTables
 using Makie
 using CairoMakie
 using WGLMakie
-# using GLMakie
+if Sys.iswindows()
+    using GLMakie
+end
 using GraphMakie
 using GeoMakie
 using Proj
@@ -82,6 +84,7 @@ include("core/utils.jl")
 #IO
 include("core/export.jl")
 
+include("io/pliers-io.jl")
 include("io/networks_io.jl")
 include("io/util-enwl-networks.jl")
 include("io/util-spanish-networks.jl")

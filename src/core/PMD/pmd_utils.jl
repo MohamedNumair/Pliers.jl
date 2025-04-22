@@ -529,9 +529,14 @@ function calculate_vuf!(PF_RES, math)
         voltages = bus_data["voltage"]
 
         # Extract phase-to-neutral voltages
-        Va = voltages["1"] - voltages["4"]
-        Vb = voltages["2"] - voltages["4"]
-        Vc = voltages["3"] - voltages["4"]
+        vag = haskey(voltages, "1") ? voltages["1"] : 0 + 0im
+        vbg = haskey(voltages, "2") ? voltages["2"] : 0 + 0im
+        vcg = haskey(voltages, "3") ? voltages["3"] : 0 + 0im
+        vng = haskey(voltages, "4") ? voltages["4"] : 0 + 0im
+
+        Va = vag - vng
+        Vb = vbg - vng
+        Vc = vcg - vng
 
         # Symmetrical component transformation
         V0 = (Va + Vb + Vc) / 3
