@@ -16,7 +16,7 @@ using Makie
 using CairoMakie
 using WGLMakie
 if Sys.iswindows()
-    using GLMakie
+    # using GLMakie
 end
 using GraphMakie
 using GeoMakie
