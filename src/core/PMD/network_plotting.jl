@@ -452,7 +452,7 @@ function network_graph_map_plot(
 
     translate!(graph, 0,0,100);
 
-    return m, m.axis, graph
+    return m #, m.axis, graph
 end
 
 #=

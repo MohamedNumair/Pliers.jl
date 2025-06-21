@@ -4,7 +4,7 @@ The Idea here is to get the results dictionary of PMD power flow or optimal powe
 
 
 """
-calc_bases_from_dict(data::Dict{String,Any}; return_dict=false)
+calc_bases_from_dict(data::Dict{String,Any}; return_dict=false) 
 
 Calculate electrical base quantities from a data dictionary.
 
@@ -77,10 +77,10 @@ end
 # function to get the results dictionary
 
 function pf_results(eng::Dict{String, Any}; max_iter = 5000,kwargs...)
-
+    # I won't develop this function further, the strategy will be to calcualte your results using typical PMD.jl functions and then you use dictify solution and viz anything. 
     is_explicit_netrual = length(eng["conductor_ids"]) > 3 ? true :  false
 
-    eng["data_model"] == PowerModelsDistribution.ENGINEERING ? math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("This function only supports ENGINEERING data model for the moment")
+    _is_eng(eng) ? math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("This function only supports ENGINEERING data model for the moment")
     
     add_start_vrvi!(math)
     PF = compute_mc_pf(math; explicit_neutral=is_explicit_netrual, max_iter=max_iter)
@@ -102,7 +102,7 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
     # Moving results into the ENG dictionary 
     eng = deepcopy(eng)
     pf_sol = results["solution"]
-    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(pf_sol)
+    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ  = calc_bases_from_dict(pf_sol)
 
     for (b, bus) in pf_sol["bus"]
         bus["V"] = bus["vm"] .* exp.(im * bus["va"])
@@ -211,83 +211,164 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
         "vbase_V" => vbase_V,
         "sbase_VA" => sbase_VA,
         "Zbase_Ω" => Zbase_Ω,
-        "Ibase_A" => Ibase_A
+        "Ibase_A" => Ibase_A,
+        "vbase_ll" => vbase_ll,
+        "Ibase_A_ll" => Ibase_A_ll,
+        "Ibase_A_ϕ" => Ibase_A_ϕ
     )
 
     if detailed
         pf_results_buses(pf_sol, math; keep_pu)
     end
-
+    
     return eng, math, results
 end
 
 
 
-function pf_results_buses(pf_sol::Dict{String, Any}, math; keep_pu::Bool)
-    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(pf_sol)
-    header("Buses Results")
+function branch_viz(pf_sol::Dict{String, Any}, math, branch_id; keep_pu=true::Bool, makie_backend=WGLMakie, rounding_digits = 4::Int, fig_size= nothing::Union{Tuple{Int, Int}, Nothing}, eng=nothing::Union{Dict{String, Any},Nothing})
+   
+    makie_backend.activate!()
+    dictify_solution!(pf_sol, math)
+    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ = calc_bases_from_dict(pf_sol)
+    terms = length(math["branch"][branch_id]["f_connections"])
+    fig_size = isnothing(fig_size) ? (200*2*terms, 200*terms) : fig_size
+    f = Figure(size = fig_size)
 
-    if keep_pu*is_perunit
-        buses_res_df = DataFrame(   Bus = String[],
-                                    Vm_pu = Vector{Float64}[],
-                                    θ_rad = Vector{Float64}[],
-                                    V_pu = Vector{ComplexF64}[],
-                                )
+    f_bus_math_id = math["branch"][branch_id]["f_bus"]
+    t_bus_math_id = math["branch"][branch_id]["t_bus"]
+    
+    branch_c_fr = pf_sol["branch"][branch_id]["current_from"]
+    branch_c_to = pf_sol["branch"][branch_id]["current_to"]
+    
+    branch_imp_matrix = math["branch"][branch_id]["br_r"] .+ im * math["branch"][branch_id]["br_x"]
 
-        for (b, bus) in pf_sol["bus"]
-            push!(buses_res_df,(
-                                    math["bus"][b]["name"], 
-                                    bus["vm"],
-                                    bus["va"],
-                                    bus["V"],
-                                ))
-        end
+
+    gl_fbus = GridLayout(f[1,1]) # Left panel for 'from' bus 
+    gl_mid = GridLayout(f[1,2]) # Middle panel for branch details
+    gl_tbus = GridLayout(f[1,3]) # Right panel for 'to' bus
+
+    eng_line_id = math["branch"][branch_id]["name"]
+
+
+    if isnothing(eng) || occursin("virtual", eng_line_id)
+        linecode = "N/A" 
+        line_len = "N/A"
+        @info "if you want linecode data pass the ENGINEERING model with the eng argument"
+        lc_imp = fill("", size(branch_imp_matrix))
     else
-        buses_res_df = DataFrame(   Bus = String[],
-                                    Vm_V = Vector{Float64}[],
-                                    θ_deg = Vector{Float64}[],
-                                    V_V = Vector{ComplexF64}[],
-                                )
+         linecode = eng["line"][eng_line_id]["linecode"]
+         line_len = eng["line"][eng_line_id]["length"]
+         lc_imp = eng["linecode"][linecode]["rs"] .+ im * eng["linecode"][linecode]["xs"]
+         lc_imp = keep_pu ? lc_imp : lc_imp * Zbase_Ω;
+    end 
+    
+    Label(gl_mid[0,1], "Branch: $branch_id [$(eng_line_id)] lc: [$linecode] length: [$line_len] m", fontsize=16, tellwidth=false, justification=:center,color=:blue)
+    
+    
+    gl_matrix = GridLayout(gl_mid[1,1])
+    for i in axes(branch_imp_matrix, 1)
+        for j in axes(branch_imp_matrix, 2)            
+                    if !ismissing(branch_imp_matrix[i, j])
+                        branch_imp_matrix[i, j] = keep_pu ? branch_imp_matrix[i, j] : branch_imp_matrix[i, j] * Zbase_Ω;
+                        zij = round(branch_imp_matrix[i, j], digits=rounding_digits);
+                        i ==j ? _MK.Box(gl_matrix[i, j], linestyle = :solid, color = RGBAf(0.2, 0.5, 0.7, 0.5)) : _MK.Box(gl_matrix[i, j], linestyle = :dot, color = RGBAf((i*j)*0.01, 0.53, 0.93, 0.095))
+                        zij_polar = polarize(zij)
 
-
-
-        for (b, bus) in pf_sol["bus"]
-            push!(buses_res_df,(
-                                    math["bus"][b]["name"], 
-                                    bus["vm"]*vbase_V,
-                                    rad2deg.(bus["va"]),
-                                    bus["V"]*vbase_V,
-                                ))
+                        Label(gl_matrix[i, j], "$(zij) \n $(zij_polar) \n ($(lc_imp[i, j]))", fontsize=14, tellwidth=false, tellheight=false, justification=:center, color=:black)
+                    end
         end
     end
 
-    return pretty_table(buses_res_df)
+
+    # Visualize from bus
+    visualize_bus_terminals(
+        pf_sol["bus"][string(f_bus_math_id)]["voltage"], 
+        string(f_bus_math_id), 
+        branch_c_fr, 
+        gl_fbus, 
+        keep_pu, # keep_pu 
+        Ibase_A, 
+        vbase_V, 
+        rounding_digits,
+        string(math["bus"][string(f_bus_math_id)]["name"]) # pass the engineering bus id
+    )
+
+    # Visualize to bus
+    visualize_bus_terminals(
+        pf_sol["bus"][string(t_bus_math_id)]["voltage"], 
+        string(t_bus_math_id), 
+        branch_c_to, 
+        gl_tbus,
+        keep_pu, # keep_pu
+        Ibase_A, 
+        vbase_V, 
+        rounding_digits,
+        string(math["bus"][string(t_bus_math_id)]["name"]) # pass the engineering bus id
+
+    )
+    #_MK.Box(gl_fbus[1:end, 1], color = :transparent, strokecolor = :red, tellheight=true) # Left panel box
+    #_MK.Box(gl_tbus[1:end, 1], color = :transparent, strokecolor = :red, tellheight=true) # Right panel box
+    
+    resize_to_layout!(f)
+    return f
+
 
 end
 
 
 
-function bus_res(eng::Dict{String, Any}, bus_id::String; keep_pu::Bool= false, makie_backend=WGLMakie,
-    )
-    is_perunit = eng["bases"]["is_perunit"]
-    vbase_V = eng["bases"]["vbase_V"]
+function visualize_bus_terminals(
+    bus_Vs::Dict, 
+    bus_id::String, 
+    branch_currents::Dict, 
+    gl_bus::GridLayout, 
+    keep_pu::Bool=false, 
+    Ibase_A::Real=1.0, 
+    vbase_V::Real=1.0, 
+    rounding_digits::Int=4,
+    eng_id::String = "N/A" # Engineering bus id
+)
+    # Add title for the bus
+    title_gl = GridLayout(gl_bus[0,1])
+    Label(title_gl[1,1], "Bus $bus_id [$(eng_id)]", fontsize=18, tellwidth=true, justification=:center, color=:black)
     
-    bus = eng["bus"][bus_id]
+    # Process each terminal
+    for (t, voltage) in sort(bus_Vs)
+        # Process current
+        current = keep_pu ? branch_currents[t] : branch_currents[t] * Ibase_A
+        current = round(current, digits=rounding_digits)
+        current_polar = Pliers.polarize(current)
+        
+        # Process voltage
+        voltage = keep_pu ? voltage : voltage * vbase_V
+        voltage = round(voltage, digits=rounding_digits)
+        voltage_polar = Pliers.polarize(voltage, rounding_digits=rounding_digits)
+        
+        # Get phase letter
+        pl = Pliers._phase_letter(parse(Int, t))
+        
+        # Set up terminal grid layout
+        terminal_gl = GridLayout(gl_bus[parse(Int, t), 1])
+        
+        # Terminal label
+        Label(terminal_gl[1:4, 0], L"\textbf{%$(pl)}", fontsize=16, tellwidth=true, tellheight=true, justification=:center, color=:navy)
+        
+        # Voltages per terminal
+        Label(terminal_gl[1:2, 1], L"U_%$(pl)", fontsize=16, tellwidth=true, tellheight=true, justification=:center, color=:royalblue)
+        Label(terminal_gl[1, 2], "$(voltage)", fontsize=15, tellwidth=true, tellheight=true, justification=:center, color=:black)
+        Label(terminal_gl[2, 2], "$(voltage_polar)", fontsize=15, tellwidth=true, tellheight=true, justification=:center, color=:black)
+        
+        # Currents per terminal
+        Label(terminal_gl[3:4, 1], L"I_%$(pl)", fontsize=16, tellwidth=true, tellheight=true, justification=:center, color=:darkslateblue)
+        Label(terminal_gl[3, 2], "$(current)", fontsize=15, tellwidth=true, tellheight=true, justification=:center, color=:black)
+        Label(terminal_gl[4, 2], "$(current_polar)", fontsize=15, tellwidth=true, tellheight=true, justification=:center, color=:black)
 
-    if keep_pu*is_perunit
-        V = bus["V"]
-        Vm = abs.(V_pu)
-        θ = angle.(V_pu)
-    else
-        V = bus["V"]*vbase_V
-        Vm = abs.(V)
-        θ = rad2deg.(angle.(V)) 
-    end 
-    # create a makie plot for the bus
+        _MK.Box(terminal_gl[1:end, 0:2], color = :transparent, strokecolor = :black, tellheight=true, linestyle = :solid) 
+        _MK.Box(terminal_gl[1:2, 1:2], color = :transparent, strokecolor = :royalblue, tellheight=true, linestyle = :dot) 
+        _MK.Box(terminal_gl[3:4, 1:2], color = :transparent, strokecolor = :darkslateblue, tellheight=true, linestyle = :dot) 
 
-    makie_backend.activate!()
-
-    return V, Vm, θ
+    end
 end
 
 
@@ -450,10 +531,10 @@ Plots voltage phasors for a given bus onto an existing `PolarAxis`.
 - `colors`: The colors to use for the different phases (default: `[:darkred, :darkgreen, :darkblue, :black]`).
 """
 function bus_phasor!(ax::PolarAxis, eng::Dict{String, Any}, bus_id::Integer;
-                     linestyle=:solid, colors=[:darkred, :darkgreen, :darkblue, :black])
+                     linestyle=:solid, colors=[:darkred, :darkgreen, :darkblue, :black], keep_pu::Bool=false)
 
     # Extract base voltage - assuming results are not in per unit based on original logic
-    #is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A = calc_bases_from_dict(eng)
+    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ = calc_bases_from_dict(eng)
     bus_id = string(bus_id)
     bus = eng["bus"][bus_id]
 
@@ -462,7 +543,7 @@ function bus_phasor!(ax::PolarAxis, eng::Dict{String, Any}, bus_id::Integer;
         
         if haskey(bus["voltage"], phase_key)
             V_complex = bus["voltage"][phase_key]
-            Vm = abs(V_complex) # * vbase_V
+            Vm = keep_pu ? abs(V_complex) : abs(V_complex) * vbase_V
             θ = angle(V_complex)
             lines!(ax, [0, θ], [0, Vm], color=color, linewidth=2, linestyle=linestyle)
         end
@@ -488,25 +569,130 @@ Creates a new figure and plots voltage phasors for a given bus.
 """
 function bus_phasor(eng::Dict{String, Any}, bus_id::Integer;
                     makie_backend=WGLMakie,
-                    fig_size=(800, 800)
+                    figure::Figure = nothing,
+                    location::Tuple{Int, Int} = (1, 1),
+                    fig_size=(800, 800),
+                    keep_pu::Bool=false,
                    )
-
-    makie_backend.activate!()
-    f = Figure(size=fig_size)
+    if isnothing(figure) 
+        makie_backend.activate!()
+        f = Figure(size=fig_size)
+    else
+        f = figure
+    end
 
     degree_ticks = 0:30:330
     radian_ticks = deg2rad.(degree_ticks)
     tick_labels = ["$(d)°" for d in degree_ticks]
 
-    ax = PolarAxis(f[1, 1],
+    ax = PolarAxis(f[location[1], location[2]],
                    title="Bus $bus_id Phasors",
-                   thetaticks=(radian_ticks, tick_labels)
+                   thetaticks=(radian_ticks, tick_labels),
                   )
 
-    bus_phasor!(ax, eng, bus_id)
+    bus_phasor!(ax, eng, bus_id, keep_pu=keep_pu)
 
     return f, ax
 end
+
+function Vphasor(data::Dict{String, Any}, bus_id::Integer;
+         makie_backend=WGLMakie, fig_size=(800, 800),colors=[:darkred, :darkgreen, :darkblue, :black],keep_pu = true, kwargs...) 
+            
+         makie_backend.activate!()
+
+         f = Figure(size=fig_size)
+            degree_ticks = 0:30:330
+            radian_ticks = deg2rad.(degree_ticks)
+            tick_labels = ["$(d)°" for d in degree_ticks]
+
+            ax = PolarAxis(f[1,1],
+                           title = "Bus $bus_id Voltage Phasors",
+                           thetaticks = (radian_ticks, tick_labels),
+                           kwargs...
+                          )
+        is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ = calc_bases_from_dict(data)
+        bus_id = string(bus_id)
+        bus = data["bus"][bus_id]
+
+        for (i, color) in enumerate(colors)
+            phase_key = string(i)
+            
+            if haskey(bus["voltage"], phase_key)
+                V_complex = bus["voltage"][phase_key]
+                Vm = keep_pu ? abs(V_complex) : abs(V_complex) * vbase_V
+                θ = angle(V_complex)
+                lines!(ax, [0, θ], [0, Vm], color=color, linewidth=2, linestyle=:solid)
+            end
+        end
+
+        return f
+end
+
+
+"""
+    vphasor(scene, value; kwargs...)
+    vphasor!(scene, value; kwargs...)
+
+Plot a complex number as a phasor (arrow from origin) in a 2D plane.
+
+# Arguments
+- `scene`: The Makie scene to plot into
+- `value`: A complex number to be plotted as a phasor
+
+# Attributes
+- `arrowcolor`: Color of the phasor arrow (default: current theme's linecolor)
+- `arrowsize`: Size of the arrowhead in pixels (default: 15)
+- `linewidth`: Width of the phasor line (default: current theme's linewidth)
+- `label`: Label for the phasor in the legend (default: "")
+- `linestyle`: Style of the phasor line (default: nothing)
+- `inspectable`: Whether the phasor is inspectable with mouse hover (default: true)
+
+# Examples
+v1 = 1 + 2im
+v2 = -2 - 1im
+v3 = 0.5 - 1.5im
+
+vphasor(scene, v1, arrowcolor = :red, label = "V1")
+vphasor!(scene, v2, arrowcolor = :green, label = "V2")
+vphasor!(scene, v3, arrowcolor = :blue, label = "V3")
+"""
+# VPhasor recipe: plots a complex number as an arrow from origin.
+MakieCore.@recipe(VPhasor, value) do scene
+    Theme(
+        arrowcolor = Makie.theme(scene, :linecolor), # Default to current linecolor from the theme
+        arrowsize = 15,
+        linewidth = Makie.theme(scene, :linewidth), # Default to current linewidth from the theme
+        label = "",
+        linestyle = nothing, # Allow linestyle to be passed to arrows!
+        inspectable = true   # Default for inspectable attribute
+    )
+end
+
+function Makie.plot!(plot::VPhasor{<:Tuple{C}}) where {C <: Complex}
+    # value_obs is an Observable{Complex} containing the input complex number
+    value_obs = plot.value
+
+    # Create an Observable for the arrow points
+    # The arrow will go from the origin (0,0) to (real(value), imag(value))
+    arrow_points = lift(value_obs; ignore_equal_values=true) do val
+        [Point2f(0, 0), Point2f(real(val), imag(val))]
+    end
+
+    # Use Makie.arrows! to draw the phasor
+    # plot.attributes gives access to the theme and any attributes passed by the user
+    Makie.arrows!(plot, arrow_points;
+        color = plot.arrowcolor,
+        arrowsize = plot.arrowsize,
+        linewidth = plot.linewidth,
+        linestyle = plot.linestyle,
+        label = plot.label,
+        inspectable = plot.inspectable
+    )
+
+    return plot # Return the plot object
+end
+
+
 
 
 

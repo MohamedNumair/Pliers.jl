@@ -129,31 +129,3 @@ end
 function load_spanish_dataset()
     return load(joinpath(BASE_DIR,"test/data/Spanish_Network.jld2"))
 end
-
-## FILE SEARCHING 
-
-function search_files(directory, file_name)
-    files = []
-    for (root, dirs, file) in walkdir(directory)
-        for f in file
-            if occursin(file_name, f)
-                push!(files, joinpath(root, f))
-            end
-        end
-    end
-    return files
-end
-
-# write a search for directory
-
-function search_directories(directory, directory_name)
-    directories = []
-    for (root, dirs, file) in walkdir(directory)
-        for d in dirs
-            if occursin(directory_name, d)
-                push!(directories, joinpath(root, d))
-            end
-        end
-    end
-    return directories
-end

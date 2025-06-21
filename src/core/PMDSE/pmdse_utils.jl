@@ -24,7 +24,7 @@ end
 
 
 #TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
-function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing)
+function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE_N = nothing, APEs_df = nothing, pm_form = PowerModelsDistribution.IVRENPowerModel)
 
     se_sol_en = SE_en["solution"]
     solve_time = SE_en["solve_time"]
@@ -39,11 +39,26 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing)
     string(termination_status) == "LOCALLY_SOLVED" ? printstyled(" termination : $(termination_status) \n", color=:green) : printstyled(" termination : $(termination_status) \n", color=:red)
     string(primal_status) == "FEASIBLE_POINT" ? printstyled(" primal : $(primal_status) \n", color=:green) : printstyled(" primal : $(primal_status) \n", color=:red)
     !isnothing(mape) ? isapprox(mape, 0, atol=0.05)  ? printstyled(" MAPE : $(mape) \n", color=:green) : printstyled(" MAPE : $(mape) \n", color=:red) : nothing
+    !isnothing(MAPE_N) ? isapprox(MAPE_N, 0, atol=0.05)  ? printstyled(" MAPE_N : $(MAPE_N) \n", color=:green) : printstyled(" MAPE_N : $(MAPE_N) \n", color=:red) : nothing
+    
     m,n, dof = get_m_n_dof(math_en)
     printstyled(" m : $(m) \n", color=:green)
     printstyled(" n : $(n) \n", color=:green)
     dof > 0 ? printstyled(" Degrees of freedom : $(dof) \n", color=:green) : printstyled(" Degrees of freedom : $(dof) \n", color=:red)
     
+    @suppress display(instantiate_mc_model(
+        math_en,
+        pm_form,
+        PowerModelsDistributionStateEstimation.build_mc_se;
+    ).model)
+
+    if !isapprox(mape, 0, atol=0.05)
+        if !isnothing(APEs_df)
+            println("APEs_df:")
+            display(APEs_df)
+        end
+    end
+
     # Merge residuals with meas
     for (m, meas) in se_sol_en["meas"]
         math_en["meas"][m]["res"] = meas["res"]
@@ -132,10 +147,11 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing)
 
 end
 
-function viz_residuals(SE_en, math_en, PF_en; show_legend=false)
+function viz_residuals(SE_en, math_en, PF_en; show_legend=false, kwargs...)
 
-    MAPE, _, _ = Pliers._calculate_MAPE(SE_en, PF_en, math_en)
-    viz_residuals(SE_en, math_en; show_legend = show_legend, mape = MAPE)
+    MAPE, APEs_df, _ = Pliers._calculate_MAPE(SE_en, PF_en, math_en)
+    MAPE_N, _ , _ = _calculate_MAPE_toNeutral(SE_en, PF_en, math_en)
+    viz_residuals(SE_en, math_en; show_legend = show_legend, mape = MAPE, APEs_df = APEs_df, MAPE_N=MAPE_N, kwargs...)
 
 end
 
@@ -382,13 +398,78 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
             # println("Term   :",term)
             # println("Vse   :",Vse)
             # println("Vpf     :", pf_sol["bus"][b]["voltage"][term])
-            Vpf = pf_sol["bus"][b]["voltage"][term]
+
+
+            #haskey(bus["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
+            #haskey(pf_sol["bus"][b]["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
+
+            #Vpf = pf_sol["bus"][b]["voltage"][term] 
+            
+            Vpf = haskey(pf_sol, "4") ?  pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]   : pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
+            Vse = haskey(Vse, "4") ? Vse - bus["voltage"]["4"] : Vse
 
             # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
-            APE = ( abs.( Vse - Vpf ) ./ abs.(Vpf) )* 100
+            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
+            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
+            APE = (abs.(Vse .- Vpf) ./ abs.(Vpf) ) * 100
             Error = Vse - Vpf
             push!(APEs,APE)
             push!(Errors,Error)
+
+
+            push!(APEs_df, (b, term, APE))
+            push!(Errors_df, (b, term, Error))
+
+        end
+
+    end
+    
+    APEs_nonan = filter(x -> !isnan(x), APEs)
+    mean_APE = mean(APEs_nonan)
+    return mean_APE, APEs_df, Errors_df
+
+end
+
+function _calculate_MAPE_toNeutral(SE_RES, PF_RES, math)
+
+    se_sol  = deepcopy(SE_RES["solution"])
+    pf_sol = deepcopy(PF_RES["solution"])
+
+    dictify_solution!(pf_sol, math)
+    dictify_solution!(se_sol, math)
+
+    APEs = [] 
+    Errors = [] 
+
+    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
+    APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
+    for (b,bus) in se_sol["bus"]
+
+        for (term,Vse) in bus["voltage"] 
+            if term == "4"
+                continue
+            end
+            # println("Bus    :",b)
+            # println("Term   :",term)
+            # println("Vse   :",Vse)
+            # println("Vpf     :", pf_sol["bus"][b]["voltage"][term])
+
+
+            #haskey(bus["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
+            #haskey(pf_sol["bus"][b]["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
+
+            #Vpf = pf_sol["bus"][b]["voltage"][term] 
+            Vpf = pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]  # subtract the dummy voltage for the 4th terminal if it doesn't exist
+            Vse = Vse - bus["voltage"]["4"] # subtract the dummy voltage for the 4th terminal if it doesn't exist   
+
+            # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
+            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
+            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
+            APE = (abs.(Vse .- Vpf) ./ abs.(Vpf) ) * 100
+            Error = Vse - Vpf
+            push!(APEs,APE)
+            push!(Errors,Error)
+
 
             push!(APEs_df, (b, term, APE))
             push!(Errors_df, (b, term, Error))

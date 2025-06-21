@@ -160,3 +160,60 @@ end
 function show_example(dict::Dict)
     return first(dict).second
 end
+
+polarize(complex::Complex; scale=1.0::Float64, rounding_digits = 4) = "$(round(abs(complex)*scale, digits=rounding_digits)) ∠ $(round(rad2deg(angle(complex)), digits=rounding_digits))"
+
+
+
+function _phase_letter(phase::Int) 
+    if phase == 0
+        return "g"
+    elseif phase == 1
+        return "a"
+    elseif phase == 2
+        return "b"
+    elseif phase == 3
+        return "c"
+    elseif phase == 4
+        return "n"
+    else
+        error("Invalid phase value: $phase")
+    end
+end
+
+
+function search_files(directory, file_name)
+    files = []
+    for (root, dirs, file) in walkdir(directory)
+        for f in file
+            if occursin(file_name, f)
+                push!(files, joinpath(root, f))
+            end
+        end
+    end
+    return files
+end
+
+function list_files(directory)
+    files = []
+    for (root, dirs, file) in walkdir(directory)
+        for f in file
+            push!(files, joinpath(root, f))
+        end
+    end
+    return files
+end
+
+# write a search for directory
+
+function search_directories(directory, directory_name)
+    directories = []
+    for (root, dirs, file) in walkdir(directory)
+        for d in dirs
+            if occursin(directory_name, d)
+                push!(directories, joinpath(root, d))
+            end
+        end
+    end
+    return directories
+end

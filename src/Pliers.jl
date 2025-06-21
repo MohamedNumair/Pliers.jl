@@ -6,6 +6,7 @@ using DataFrames
 using CSV
 using FileIO
 using Serialization
+using Suppressor
 # pretty terminal packages
 using Crayons
 using Crayons.Box
@@ -13,6 +14,7 @@ using PrettyTables
 
 # plotting packages
 using Makie
+using MakieCore
 using CairoMakie
 using WGLMakie
 if Sys.iswindows()

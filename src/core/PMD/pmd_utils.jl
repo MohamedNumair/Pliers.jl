@@ -137,15 +137,16 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
                 if haskey(load, "crd_bus") && haskey(load, "cid_bus")
                     load["current_bus"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
                 end
+
                 if haskey(load, "crd") && haskey(load, "cid")
                     load["current"] = Dict(string(term) => load["crd"][i] + load["cid"][i]*im for (i, term) in enumerate(terminals))
                 end
     
                 # Create power dictionary based on available keys
-                if haskey(load, "pd_bus") && haskey(load, "qd_bus")
-                    load["power_bus"] = Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals))
-                    @debug "DELTA: added bus powers"
-                end
+                # if haskey(load, "pd_bus") && haskey(load, "qd_bus")
+                #     load["power_bus"] = Dict(string(term) => load["pd_bus"][i] + load["qd_bus"][i]*im for (i, term) in enumerate(terminals))
+                #     @debug "DELTA: added bus powers"
+                # end
                 if haskey(load, "pd") && haskey(load, "qd")
                     load["power"] = Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))
                     @debug "DELTA: added load powers"
@@ -518,10 +519,6 @@ function calculate_vuf!(PF_RES, math)
 
     dictify_solution!(pf_sol, math)
 
-    # Operator 'α' = exp(j*2π/3)
-    α = cis(2π/3)
-    α² = α^2
-
     VUF_dict = Dict{String, Float64}()
 
     # get loaded buses 
@@ -539,9 +536,7 @@ function calculate_vuf!(PF_RES, math)
         Vc = vcg - vng
 
         # Symmetrical component transformation
-        V0 = (Va + Vb + Vc) / 3
-        V1 = (Va + α  * Vb + α² * Vc) / 3  # Positive-sequence
-        V2 = (Va + α² * Vb + α  * Vc) / 3  # Negative-sequence
+        V0, V1, V2 = calculate_symmetrical_components(Va, Vb, Vc)
 
         # Compute VUF
         vuf = abs(V2 / V1) * 100
@@ -553,4 +548,67 @@ function calculate_vuf!(PF_RES, math)
     end
 
     return VUF_dict
+end
+
+
+function calculate_symmetrical_components(Va, Vb, Vc)
+    # Operator 'α' = exp(j*2π/3)
+    α = cis(2π/3)
+    α² = α^2
+    # Symmetrical component transformation
+    V0 = (Va + Vb + Vc) / 3
+    V1 = (Va + α  * Vb + α² * Vc) / 3  # Positive-sequence
+    V2 = (Va + α² * Vb + α  * Vc) / 3  # Negative-sequence
+
+    return V0, V1, V2
+end
+
+
+function calculate_symmetrical_components(bus_dict::Dict{String, Any})
+    # Extract phase-to-neutral voltages
+    vag = haskey(bus_dict["voltage"], "1") ? bus_dict["voltage"]["1"] : 0 + 0im
+    vbg = haskey(bus_dict["voltage"], "2") ? bus_dict["voltage"]["2"] : 0 + 0im
+    vcg = haskey(bus_dict["voltage"], "3") ? bus_dict["voltage"]["3"] : 0 + 0im
+    vng = haskey(bus_dict["voltage"], "4") ? bus_dict["voltage"]["4"] : 0 + 0im
+
+    Va = vag - vng
+    Vb = vbg - vng
+    Vc = vcg - vng
+
+    return calculate_symmetrical_components(Va, Vb, Vc)
+end
+
+function plot_symmetrical_components(bus_dict::Dict{String, Any};     makie_backend=WGLMakie,
+                    figure::Figure = nothing,
+                    location::Tuple{Int, Int} = (1, 1),
+                    fig_size=(800, 800),
+                    kwargs...
+                   )
+
+    V0, V1, V2 = calculate_symmetrical_components(bus_dict)
+
+
+    if isnothing(figure) 
+        makie_backend.activate!()
+        f = Figure(size=fig_size)
+    else
+        f = figure
+    end
+
+    degree_ticks = 0:30:330
+    radian_ticks = deg2rad.(degree_ticks)
+    tick_labels = ["$(d)°" for d in degree_ticks]
+
+
+
+    ax = PolarAxis(f[location[1], location[2]],
+                   title="Voltage Symemtrical Compoenents",
+                   thetaticks=(radian_ticks, tick_labels),
+                   kwargs...
+                  )
+
+    bus_phasor!(ax, eng, bus_id)
+
+    return f, ax
+
 end
