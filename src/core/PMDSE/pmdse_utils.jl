@@ -402,12 +402,8 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
 
             #haskey(bus["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
             #haskey(pf_sol["bus"][b]["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-
-            #Vpf = pf_sol["bus"][b]["voltage"][term] 
-            
-            Vpf = haskey(pf_sol, "4") ?  pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]   : pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-            Vse = haskey(Vse, "4") ? Vse - bus["voltage"]["4"] : Vse
-
+            Vpf = haskey(pf_sol["bus"][b]["voltage"], "4")  ?  pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]   : pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
+            Vse = haskey(bus["voltage"] , "4") ? Vse - bus["voltage"]["4"] : Vse
             # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
             #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
             #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
