@@ -595,6 +595,53 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::Integer;
     return f, ax
 end
 
+
+function bus_phasor(bus_data::Dict{String, Any};
+                    makie_backend=WGLMakie, fig_size=(800, 800), colors=[:darkred, :darkgreen, :darkblue, :black], kwargs...)
+                    
+    makie_backend.activate!()
+    haskey(bus_data, "voltage") || error("The bus_data dictionary must contain a 'bus' dictionary with 'voltage' entry of the complex values. see also `dictify_solution!` function")
+    f = Figure(size=fig_size)
+    degree_ticks = 0:30:330
+    radian_ticks = deg2rad.(degree_ticks)
+    tick_labels = ["$(d)°" for d in degree_ticks]
+    ax = PolarAxis(f[1,1],
+                   title = "Bus Voltage Phasors",
+                   thetaticks = (radian_ticks, tick_labels),
+                   kwargs...
+                  )
+    for (i, color) in enumerate(colors)
+        phase_key = string(i)
+        if haskey(bus_data["voltage"], phase_key)
+            V_complex = bus_data["voltage"][phase_key]
+            Vm = abs(V_complex)
+            θ = angle(V_complex)
+            lines!(ax, [0, θ], [0, Vm], color=color, linewidth=2, linestyle=:solid; kwargs...)
+        end
+    end
+    display(f)
+    return f, ax
+end
+
+
+function bus_phasor!(ax::PolarAxis,bus_data::Dict{String, Any};
+                     colors=[:darkred, :darkgreen, :darkblue, :black], kwargs...)
+    haskey(bus_data, "voltage") || error("The bus_data dictionary must contain a 'bus' dictionary with 'voltage' entry of the complex values. see also `dictify_solution!` function")
+    
+    for (i, color) in enumerate(colors)
+        phase_key = string(i)
+        if haskey(bus_data["voltage"], phase_key)
+            V_complex = bus_data["voltage"][phase_key]
+            Vm = abs(V_complex)
+            θ = angle(V_complex)
+            lines!(ax, [0, θ], [0, Vm], color=color ; kwargs...)
+        end
+    end
+    
+    return ax
+end
+
+
 function Vphasor(data::Dict{String, Any}, bus_id::Integer;
          makie_backend=WGLMakie, fig_size=(800, 800),colors=[:darkred, :darkgreen, :darkblue, :black],keep_pu = true, kwargs...) 
             
