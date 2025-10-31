@@ -84,14 +84,14 @@ function network_graph_plot(
                             node_marker=automatic,
                             node_strokewidth=automatic,
                             show_node_labels=false, #nlablels
-                            
+                            nlabels_fontsize=12,
                             #edges
                             elabels = nothing,
                             show_edge_labels=false, #elabels
                             edge_color= :black,
                             elabels_color = :black,
-                            #elabels_fontsize =  nothing,
-                            tangents =((0,-1),(0,-1)),
+                            elabels_fontsize =  12,
+                            tangents =nothing,
 
                             # arrow
                             arrow_show=false,
@@ -119,13 +119,14 @@ function network_graph_plot(
                         node_marker=node_marker,
                         node_strokewidth=node_strokewidth,
                         show_node_labels=show_node_labels,
+                        nlabels_fontsize=nlabels_fontsize,
                         
                         #edges
                         elabels=elabels,
                         show_edge_labels=show_edge_labels,
                         edge_color=edge_color,
                         elabels_color=elabels_color,
-                        #elabels_fontsize=elabels_fontsize,
+                        elabels_fontsize=elabels_fontsize,
                         tangents=tangents,
 
                         # arrow
@@ -165,7 +166,8 @@ function network_graph_plot!(
                             edge_color= :black,
                             elabels_color = :black,
                             #elabels_fontsize =  nothing,
-                            tangents =((0,-1),(0,-1)),
+                            #tangents =((0,-1),(0,-1)),
+                            tangents =nothing,
 
                             # arrow
                             arrow_show=false,
@@ -242,7 +244,7 @@ function network_graph_plot!(
     edge_color= :black,
     elabels_color = :black,
     #elabels_fontsize =  nothing,
-    tangents =((0,-1),(0,-1)),
+    tangents =nothing,
 
     # arrow
     arrow_show=false,
@@ -382,7 +384,7 @@ function network_graph_map_plot(
                             edge_color= :black,
                             elabels_color = :black,
                             elabels_fontsize = 10,
-                            tangents =((0,-1),(0,-1)),
+                            tangents =nothing,
 
                             # arrow
                             arrow_show=false,
@@ -696,6 +698,7 @@ function plot_network_coords(
                             data::Dict{String,Any};
                             show_node_labels=false,
                             show_edge_labels = false,
+                            show_load_labels = false,
                             fallback_layout=GraphMakie.Buchheim(),
                             edge_labels_type = :line_id,
                             phase = "1",
@@ -706,6 +709,7 @@ function plot_network_coords(
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
 
     
@@ -730,7 +734,7 @@ function plot_network_coords(
                                     layout=GraphLayout,
                                     
                                     show_node_labels=show_node_labels,
-                                    nlabels=nlabels, 
+                                    nlabels=lolabels, # add extra kwarg for lolabels to re-use nodes
                                     node_color=node_color,
                                     node_marker=node_marker,
                                     node_size=node_size,
@@ -1127,6 +1131,25 @@ function _write_nlabels(network_graph, data)
             )
     end
     return nlabels
+end
+
+## LOADS
+
+function _write_lolabels(network_graph, data)
+    lolabels = []
+    for i in 1:nv(network_graph)
+        if !isempty(network_graph.vprops[i][:loads])
+            load_str = ""
+            for load in network_graph.vprops[i][:loads]
+                load_str *= "$(load[:bus])\n"
+            end
+            push!(lolabels, load_str)
+        else
+            push!(lolabels, "")
+        end
+    end
+    @show lolabels
+    return lolabels
 end
 
 
