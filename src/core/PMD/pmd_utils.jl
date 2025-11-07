@@ -118,9 +118,11 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
             
             # Create current dictionary based on available keys
             if haskey(load, "crd_bus") && haskey(load, "cid_bus")
-                load["current"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
+                load["current_bus"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
+                load["power_bus"] = Dict(string(term) => pf_sol["bus"][string(math["load"][l]["load_bus"])]["voltage"][string(term)] * load["current_bus"][string(term)] for (i, term) in enumerate(terminals))
             elseif haskey(load, "crd") && haskey(load, "cid")
                 load["current"] = Dict(string(term) => load["crd"][i] + load["cid"][i]*im for (i, term) in enumerate(terminals))
+                load["power"] = Dict(string(term) => pf_sol["bus"][string(math["load"][l]["load_bus"])]["voltage"][string(term)] * load["current"][string(term)] for (i, term) in enumerate(terminals))
             end
 
             # Create power dictionary based on available keys
@@ -149,7 +151,6 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
                 # end
                 if haskey(load, "pd") && haskey(load, "qd")
                     load["power"] = Dict(string(term) => load["pd"][i] + load["qd"][i]*im for (i, term) in enumerate(terminals))
-                    @debug "DELTA: added load powers"
                 end  
         end
 
@@ -225,11 +226,9 @@ Separate the phase and neutral voltages from the power flow solution for a given
 - `phase_voltage::Vector{ComplexF64}`: A vector containing the phase voltages (up to 3 phases).
 - `neutral_voltage::ComplexF64`: The neutral voltage. If the neutral voltage is not present, returns 0 + 0im "assuming grounded".
 
-# Notes
-- The neutral terminal is currently hardcoded to "4". This should be fixed in future versions.
 """
 function _separate_phase_neutral_voltages(pf_sol, bus_index)
-    phase_voltage = []
+    phase_voltage = ComplexF64[]
     for i in 1:3 
         if haskey(pf_sol["bus"][bus_index]["voltage"], string(i))
             push!(phase_voltage, pf_sol["bus"][bus_index]["voltage"][string(i)])
@@ -239,7 +238,7 @@ function _separate_phase_neutral_voltages(pf_sol, bus_index)
     neutral_voltage = ComplexF64[]
 
     if haskey(pf_sol["bus"][bus_index]["voltage"], string(_N_IDX))  
-        neutral_voltage = pf_sol["bus"][bus_index]["voltage"]["4"]
+        neutral_voltage = pf_sol["bus"][bus_index]["voltage"][string(_N_IDX)]
     else 
         neutral_voltage = 0 + 0im # assuming grounded
     end
@@ -610,5 +609,23 @@ function plot_symmetrical_components(bus_dict::Dict{String, Any};     makie_back
     bus_phasor!(ax, eng, bus_id)
 
     return f, ax
+
+end
+
+
+function move_coords_eng_to_math!(eng, math)
+
+    if !haskey(eng, "bus") || !haskey(math, "bus_lookup")
+        error("The provided 'eng' or 'math' dictionary does not contain the required keys 'bus' or 'bus_lookup'.")
+    end
+
+    if !haskey(eng["bus"], "lat") || !haskey(eng["bus"], "lon")
+        error("The 'eng' dictionary does not have 'lat' or 'lon' keys in the 'bus' sub-dictionary.")
+    end
+    for (b,bus) in eng["bus"]
+        if b == "sourcebus"; continue end
+        math["bus"]["$(math["bus_lookup"][b])"]["lat"] = bus["lat"]
+        math["bus"]["$(math["bus_lookup"][b])"]["lon"] = bus["lon"]
+    end
 
 end
