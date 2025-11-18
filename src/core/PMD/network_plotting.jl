@@ -27,9 +27,9 @@ $$$$$$$/  $$ |$$ |  $$ |  $$ | __       $$$$$/  $$ |  $$ |$$ |  $$ |$$ |        
 $$ |      $$ |$$ \__$$ |  $$ |/  |      $$ |    $$ \__$$ |$$ |  $$ |$$ \_____   $$ |/  |$$ |$$ \__$$ |$$ |  $$ |
 $$ |      $$ |$$    $$/   $$  $$/       $$ |    $$    $$/ $$ |  $$ |$$       |  $$  $$/ $$ |$$    $$/ $$ |  $$ |
 $$/       $$/  $$$$$$/     $$$$/        $$/      $$$$$$/  $$/   $$/  $$$$$$$/    $$$$/  $$/  $$$$$$/  $$/   $$/ 
-                                                                                                                
-                                                                                                                
-                                                                                                                
+
+
+
 =#
 
 
@@ -69,153 +69,147 @@ f, ax, p = network_graph_plot(network_graph; layout=GraphMakie.Buchheim(), figur
 ```
 """
 function network_graph_plot(
-                            network_graph::MetaDiGraph;
+    network_graph::MetaDiGraph;
 
-                            # figure
-                            makie_backend=WGLMakie,
-                            layout=GraphMakie.Buchheim(),
-                            figure_size=(1000, 1200), #resolution
-                            
-                            #nodes
-                            nlabels = nothing,
-                            ilabels = nothing,
-                            node_color = :black,
-                            node_size=automatic,
-                            node_marker=automatic,
-                            node_strokewidth=automatic,
-                            show_node_labels=false, #nlablels
-                            nlabels_fontsize=12,
-                            #edges
-                            elabels = nothing,
-                            show_edge_labels=false, #elabels
-                            edge_color= :black,
-                            elabels_color = :black,
-                            elabels_fontsize =  12,
-                            tangents =nothing,
+    # figure
+    makie_backend=WGLMakie,
+    layout=GraphMakie.Buchheim(),
+    figure_size=(1000, 1200), #resolution
 
-                            # arrow
-                            arrow_show=false,
-                            arrow_marker='➤',
-                            arrow_size=12,
-                            arrow_shift=0.5,    
-                            kwargs...
-    
-                            )
+    #nodes
+    nlabels=nothing,
+    ilabels=nothing,
+    node_color=:black,
+    node_size=automatic,
+    node_marker=automatic,
+    node_strokewidth=automatic,
+    show_node_labels=false, #nlablels
+    nlabels_fontsize=12,
+    #edges
+    elabels=nothing,
+    show_edge_labels=false, #elabels
+    edge_color=:black,
+    elabels_color=:black,
+    elabels_fontsize=12,
+    tangents=nothing,
+
+    # arrow
+    arrow_show=false,
+    arrow_marker='➤',
+    arrow_size=12,
+    arrow_shift=0.5,
+    kwargs...)
 
     makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
 
     return graphplot(
-                        network_graph;
-                        layout=layout,
-                        resolution=figure_size,
-                        
-                        #nodes
-                        nlabels=nlabels,
-                        ilabels=ilabels,
-                        node_color=node_color,
-                        node_size=node_size,
-                        node_marker=node_marker,
-                        node_strokewidth=node_strokewidth,
-                        show_node_labels=show_node_labels,
-                        nlabels_fontsize=nlabels_fontsize,
-                        
-                        #edges
-                        elabels=elabels,
-                        show_edge_labels=show_edge_labels,
-                        edge_color=edge_color,
-                        elabels_color=elabels_color,
-                        elabels_fontsize=elabels_fontsize,
-                        tangents=tangents,
+        network_graph;
+        layout=layout,
+        resolution=figure_size,
 
-                        # arrow
-                        arrow_show=arrow_show,
-                        arrow_marker=arrow_marker,
-                        arrow_size=arrow_size,
-                        arrow_shift=arrow_shift,
+        #nodes
+        nlabels=nlabels,
+        ilabels=ilabels,
+        node_color=node_color,
+        node_size=node_size,
+        node_marker=node_marker,
+        node_strokewidth=node_strokewidth,
+        show_node_labels=show_node_labels,
+        nlabels_fontsize=nlabels_fontsize,
 
-                        # edges are linesegments
-                        edge_plottype=:linesegments,
+        #edges
+        elabels=elabels,
+        show_edge_labels=show_edge_labels,
+        edge_color=edge_color,
+        elabels_color=elabels_color,
+        elabels_fontsize=elabels_fontsize,
+        tangents=tangents,
 
-                        kwargs...
-                    )
+        # arrow
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+
+        # edges are linesegments
+        edge_plottype=:linesegments, kwargs...
+    )
 end
 
 
 function network_graph_plot!(
-                            network_graph::MetaDiGraph;
+    network_graph::MetaDiGraph;
 
-                            # figure
-                            makie_backend=WGLMakie,
-                            layout=GraphMakie.Buchheim(),
-                            figure_size=(1000, 1200), #resolution
-                            
-                            #nodes
-                            nlabels = nothing,
-                            ilabels = nothing,
-                            node_color = :black,
-                            node_size=automatic,
-                            node_marker=automatic,
-                            node_strokewidth=automatic,
-                            show_node_labels=false, #nlablels
-                            
-                            #edges
-                            elabels = nothing,
-                            show_edge_labels=false, #elabels
-                            edge_color= :black,
-                            elabels_color = :black,
-                            #elabels_fontsize =  nothing,
-                            #tangents =((0,-1),(0,-1)),
-                            tangents =nothing,
+    # figure
+    makie_backend=WGLMakie,
+    layout=GraphMakie.Buchheim(),
+    figure_size=(1000, 1200), #resolution
 
-                            # arrow
-                            arrow_show=false,
-                            arrow_marker='➤',
-                            arrow_size=12,
-                            arrow_shift=0.5,    
-                            kwargs...
-    
-                            )
+    #nodes
+    nlabels=nothing,
+    ilabels=nothing,
+    node_color=:black,
+    node_size=automatic,
+    node_marker=automatic,
+    node_strokewidth=automatic,
+    show_node_labels=false, #nlablels
+
+    #edges
+    elabels=nothing,
+    show_edge_labels=false, #elabels
+    edge_color=:black,
+    elabels_color=:black,
+    #elabels_fontsize =  nothing,
+    #tangents =((0,-1),(0,-1)),
+    tangents=nothing,
+
+    # arrow
+    arrow_show=false,
+    arrow_marker='➤',
+    arrow_size=12,
+    arrow_shift=0.5,
+    kwargs...)
 
     #makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
 
-    add_graph =  graphplot!(
-                        network_graph;
-                        layout=layout,
-                        resolution=figure_size,
-                        
-                        #nodes
-                        nlabels=nlabels,
-                        ilabels=ilabels,
-                        node_color=node_color,
-                        node_size=node_size,
-                        node_marker=node_marker,
-                        node_strokewidth=node_strokewidth,
-                        show_node_labels=show_node_labels,
-                        
-                        #edges
-                        elabels=elabels,
-                        show_edge_labels=show_edge_labels,
-                        edge_color=edge_color,
-                        elabels_color=elabels_color,
-                        #elabels_fontsize=elabels_fontsize,
-                        tangents=tangents,
+    add_graph = graphplot!(
+        network_graph;
+        layout=layout,
+        resolution=figure_size,
 
-                        # arrow
-                        arrow_show=arrow_show,
-                        arrow_marker=arrow_marker,
-                        arrow_size=arrow_size,
-                        arrow_shift=arrow_shift,
+        #nodes
+        nlabels=nlabels,
+        ilabels=ilabels,
+        node_color=node_color,
+        node_size=node_size,
+        node_marker=node_marker,
+        node_strokewidth=node_strokewidth,
+        show_node_labels=show_node_labels,
 
-                        
-                        # edges are linesegments
-                        edge_plottype=:linesegments,
-                        kwargs...
-                    )
-    translate!(add_graph, 0,0,100);
+        #edges
+        elabels=elabels,
+        show_edge_labels=show_edge_labels,
+        edge_color=edge_color,
+        elabels_color=elabels_color,
+        #elabels_fontsize=elabels_fontsize,
+        tangents=tangents,
+
+        # arrow
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+
+
+        # edges are linesegments
+        edge_plottype=:linesegments,
+        kwargs...
+    )
+    translate!(add_graph, 0, 0, 100)
 end
 
 
@@ -228,72 +222,70 @@ function network_graph_plot!(
     makie_backend=WGLMakie,
     layout=GraphMakie.Buchheim(),
     figure_size=(1000, 1200), #resolution
-    
+
     #nodes
-    nlabels = nothing,
-    ilabels = nothing,
-    node_color = :black,
+    nlabels=nothing,
+    ilabels=nothing,
+    node_color=:black,
     node_size=automatic,
     node_marker=automatic,
     node_strokewidth=automatic,
     show_node_labels=false, #nlablels
-    
+
     #edges
-    elabels = nothing,
+    elabels=nothing,
     show_edge_labels=false, #elabels
-    edge_color= :black,
-    elabels_color = :black,
+    edge_color=:black,
+    elabels_color=:black,
     #elabels_fontsize =  nothing,
-    tangents =nothing,
+    tangents=nothing,
 
     # arrow
     arrow_show=false,
     arrow_marker='➤',
     arrow_size=12,
-    arrow_shift=0.5,    
-    kwargs...
+    arrow_shift=0.5,
+    kwargs...)
 
+    #makie_backend.activate!()
+    #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
+    #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
+
+    add_graph = graphplot!(
+        ax,
+        network_graph;
+        layout=layout,
+        resolution=figure_size,
+
+        #nodes
+        nlabels=nlabels,
+        ilabels=ilabels,
+        node_color=node_color,
+        node_size=node_size,
+        node_marker=node_marker,
+        node_strokewidth=node_strokewidth,
+        show_node_labels=show_node_labels,
+
+        #edges
+        elabels=elabels,
+        show_edge_labels=show_edge_labels,
+        edge_color=edge_color,
+        elabels_color=elabels_color,
+        #elabels_fontsize=elabels_fontsize,
+        tangents=tangents,
+
+        # arrow
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+
+
+        # edges are linesegments
+        edge_plottype=:linesegments,
+        kwargs...
     )
-
-#makie_backend.activate!()
-#labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
-#elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
-
-    add_graph =  graphplot!(
-    ax,
-    network_graph;
-    layout=layout,
-    resolution=figure_size,
-
-    #nodes
-    nlabels=nlabels,
-    ilabels=ilabels,
-    node_color=node_color,
-    node_size=node_size,
-    node_marker=node_marker,
-    node_strokewidth=node_strokewidth,
-    show_node_labels=show_node_labels,
-
-    #edges
-    elabels=elabels,
-    show_edge_labels=show_edge_labels,
-    edge_color=edge_color,
-    elabels_color=elabels_color,
-    #elabels_fontsize=elabels_fontsize,
-    tangents=tangents,
-
-    # arrow
-    arrow_show=arrow_show,
-    arrow_marker=arrow_marker,
-    arrow_size=arrow_size,
-    arrow_shift=arrow_shift,
-
-
-    # edges are linesegments
-    edge_plottype=:linesegments,
-    kwargs...
-    )
-    translate!(add_graph, 0,0,100);
+    translate!(add_graph, 0, 0, 100)
 end
 
 
@@ -359,100 +351,98 @@ Plots a network graph on a map using the specified layout and visual properties.
 - A map object with the plotted network graph.
 """
 function network_graph_map_plot(
-                            network_graph::MetaDiGraph,
-                            GraphLayout:: Function;
-                            # map 
-                            tiles_provider =  TileProviders.Google(:satelite), # :roadmap, :satelite, :terrain, :hybrid
-                            zoom_lon=0.0942,
-                            zoom_lat=0.0942,
-                            # figure
-                            makie_backend=WGLMakie,
-                            figure_size=(1000, 1200), #resolution
-                            
-                            #nodes
-                            nlabels = nothing,
-                            ilabels = nothing,
-                            node_color = :black,
-                            node_size=automatic,
-                            node_marker=automatic,
-                            node_strokewidth=automatic,
-                            show_node_labels=false, #nlablels
-                            
-                            #edges
-                            elabels = nothing,
-                            show_edge_labels=false, #elabels
-                            edge_color= :black,
-                            elabels_color = :black,
-                            elabels_fontsize = 10,
-                            tangents =nothing,
+    network_graph::MetaDiGraph,
+    GraphLayout::Function;
+    # map 
+    tiles_provider=TileProviders.Google(:satelite), # :roadmap, :satelite, :terrain, :hybrid
+    zoom_lon=0.0942,
+    zoom_lat=0.0942,
+    # figure
+    makie_backend=WGLMakie,
+    figure_size=(1000, 1200), #resolution
 
-                            # arrow
-                            arrow_show=false,
-                            arrow_marker='➤',
-                            arrow_size=12,
-                            arrow_shift=0.5,    
-                            kwargs...
-    
-                            )
-                            
+    #nodes
+    nlabels=nothing,
+    ilabels=nothing,
+    node_color=:black,
+    node_size=automatic,
+    node_marker=automatic,
+    node_strokewidth=automatic,
+    show_node_labels=false, #nlablels
+
+    #edges
+    elabels=nothing,
+    show_edge_labels=false, #elabels
+    edge_color=:black,
+    elabels_color=:black,
+    elabels_fontsize=10,
+    tangents=nothing,
+
+    # arrow
+    arrow_show=false,
+    arrow_marker='➤',
+    arrow_size=12,
+    arrow_shift=0.5,
+    kwargs...)
+
     map_layout = GraphLayout(1)
     center_lon = mean(lonslats[1] for lonslats in map_layout)
     center_lat = mean(lonslats[2] for lonslats in map_layout)
     max_lon = maximum(lonslats[1] for lonslats in map_layout)
     max_lat = minimum(lonslats[2] for lonslats in map_layout)
-    cent_to_max_lon = abs(max_lon - center_lon)*2
-    cent_to_max_lat = abs(max_lat - center_lat)*2
+    cent_to_max_lon = abs(max_lon - center_lon) * 2
+    cent_to_max_lat = abs(max_lat - center_lat) * 2
 
     zoom_lon == 0.0942 ? zoom_lon = cent_to_max_lon : zoom_lon = zoom_lon
     zoom_lat == 0.0942 ? zoom_lat = cent_to_max_lat : zoom_lat = zoom_lat
 
     makie_backend.activate!()
-    map_window_coords = Rect2f(center_lon - zoom_lon/2, center_lat - zoom_lat/2, zoom_lon, zoom_lat)
+    map_window_coords = Rect2f(center_lon - zoom_lon / 2, center_lat - zoom_lat / 2, zoom_lon, zoom_lat)
 
 
-    m= Tyler.Map(map_window_coords; provider=tiles_provider, crs=Tyler.wgs84);
-    hidedecorations!(m.axis) ;
-    hidespines!(m.axis);
+    m = Tyler.Map(map_window_coords; provider=tiles_provider, crs=Tyler.wgs84)
+    hidedecorations!(m.axis)
+    hidespines!(m.axis)
 
 
 
 
 
     graph = graphplot!(
-                        network_graph;
-                        layout=GraphLayout,
-                        resolution=figure_size,
-                        
-                        #nodes
-                        nlabels=nlabels,
-                        ilabels=ilabels,
-                        node_color=node_color,
-                        node_size=node_size,
-                        node_marker=node_marker,
-                        node_strokewidth=node_strokewidth,
-                        show_node_labels=show_node_labels,
-                        
-                        #edges
-                        elabels=elabels,
-                        show_edge_labels=show_edge_labels,
-                        edge_color=edge_color,
-                        elabels_color=elabels_color,
-                        elabels_fontsize=elabels_fontsize,
-                        tangents=tangents,
+        network_graph;
+        layout=GraphLayout,
+        resolution=figure_size,
 
-                        # arrow
-                        arrow_show=arrow_show,
-                        arrow_marker=arrow_marker,
-                        arrow_size=arrow_size,
-                        arrow_shift=arrow_shift,
+        #nodes
+        nlabels=nlabels,
+        ilabels=ilabels,
+        node_color=node_color,
+        node_size=node_size,
+        node_marker=node_marker,
+        node_strokewidth=node_strokewidth,
+        show_node_labels=show_node_labels,
 
-                        
-                        # edges are linesegments
-                        edge_plottype=:linesegments,
-                        kwargs...
-                    );
+        #edges
+        elabels=elabels,
+        show_edge_labels=show_edge_labels,
+        edge_color=edge_color,
+        elabels_color=elabels_color,
+        elabels_fontsize=elabels_fontsize,
+        tangents=tangents,
 
-    translate!(graph, 0,0,100);
+        # arrow
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+
+
+        # edges are linesegments
+        edge_plottype=:linesegments,
+        kwargs...
+    )
+
+    translate!(graph, 0, 0, 100)
 
     return m #, m.axis, graph
 end
@@ -525,18 +515,18 @@ Plots a network tree based on the given engineering model dictionary `eng`.
 - Throws an error if `sourcebus` is not found in the bus data.
 """
 function plot_network_tree(
-                            data::Dict{String,Any};
-                            figure_size=(1000, 1200),
-                            show_node_labels = false,
-                            show_edge_labels = false,
-                            layout=GraphMakie.Buchheim(),
-                            edge_labels_type = :line_id,
-                            phase = "1",
-                            kwargs...
-                            )    
+    data::Dict{String,Any};
+    figure_size=(1000, 1200),
+    show_node_labels=false,
+    show_edge_labels=false,
+    layout=GraphMakie.Buchheim(),
+    edge_labels_type=:line_id,
+    phase="1",
+    kwargs...
+)
     # Create the network meta graph 
-   network_graph, _, _ = create_network_graph(data, layout)
-    
+    network_graph, _, _ = create_network_graph(data, layout)
+
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
@@ -545,32 +535,44 @@ function plot_network_tree(
     # 1. Identify the sourcebus
     if _is_eng(data)
         _decorate_nodes!(network_graph, data)
-        node_color = [ props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-        node_marker = [ props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-        node_size = [ props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
-        edge_color = [ get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
     else
         node_color = :black
         node_marker = :circle
         node_size = 10
         edge_color = :black
+        arrow_show = false
+        arrow_marker = '➤'
+        arrow_size = 12
+        arrow_shift = 0.5
     end
     # plot and return the network 
-   return network_graph_plot(
-                                network_graph;
-                                layout=layout,
-                                figure_size=figure_size,
-                                show_node_labels=show_node_labels,
-                                nlabels=nlabels, 
-                                show_edge_labels=show_edge_labels,
-                                elabels=elabels,
-                                node_color=node_color,
-                                node_marker=node_marker,
-                                node_size=node_size,
-                                edge_color=edge_color,
-                                kwargs...
-                            )
+    return network_graph_plot(
+        network_graph;
+        layout=layout,
+        figure_size=figure_size,
+        show_node_labels=show_node_labels,
+        nlabels=nlabels,
+        show_edge_labels=show_edge_labels,
+        elabels=elabels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        edge_color=edge_color,
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+        kwargs...
+    )
 end
 
 
@@ -602,49 +604,61 @@ function plot_network_tree!(
     ax::Axis,
     data::Dict{String,Any};
     figure_size=(1000, 1200),
-    show_node_labels = false,
-    show_edge_labels = false,
+    show_node_labels=false,
+    show_edge_labels=false,
     layout=GraphMakie.Buchheim(),
-    edge_labels_type = :line_id,
-    phase = "1",
+    edge_labels_type=:line_id,
+    phase="1",
     kwargs...
-    )    
-# Create the network meta graph 
-network_graph, _, _ = create_network_graph(data, layout)
+)
+    # Create the network meta graph 
+    network_graph, _, _ = create_network_graph(data, layout)
 
-# Handle labels if required
-nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
-elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+    # Handle labels if required
+    nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
 
-# FORCED NODE FORMATTING:
-# 1. Identify the sourcebus
-if _is_eng(data)
-_decorate_nodes!(network_graph, data)
-node_color = [ props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-node_marker = [ props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-node_size = [ props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
-_decorate_edges(network_graph, data)
-edge_color = [ get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-else
-node_color = :black
-node_marker = :circle
-node_size = 10
-edge_color = :black
-end
-# plot and return the network 
-return network_graph_plot!(
+    # FORCED NODE FORMATTING:
+    # 1. Identify the sourcebus
+    if _is_eng(data)
+        _decorate_nodes!(network_graph, data)
+        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+        _decorate_edges(network_graph, data)
+        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
+    else
+        node_color = :black
+        node_marker = :circle
+        node_size = 10
+        edge_color = :black
+        arrow_show = false
+        arrow_marker = '➤'
+        arrow_size = 12
+        arrow_shift = 0.5
+    end
+    # plot and return the network 
+    return network_graph_plot!(
         ax,
         network_graph;
         layout=layout,
         figure_size=figure_size,
         show_node_labels=show_node_labels,
-        nlabels=nlabels, 
+        nlabels=nlabels,
         show_edge_labels=show_edge_labels,
         elabels=elabels,
         node_color=node_color,
         node_marker=node_marker,
         node_size=node_size,
         edge_color=edge_color,
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
         kwargs...
     )
 end
@@ -695,15 +709,15 @@ plot_network_coords(eng)
 ```
 """
 function plot_network_coords(
-                            data::Dict{String,Any};
-                            show_node_labels=false,
-                            show_edge_labels = false,
-                            show_load_labels = false,
-                            fallback_layout=GraphMakie.Buchheim(),
-                            edge_labels_type = :line_id,
-                            phase = "1",
-                            kwargs...
-                            )
+    data::Dict{String,Any};
+    show_node_labels=false,
+    show_edge_labels=false,
+    show_load_labels=false,
+    fallback_layout=GraphMakie.Buchheim(),
+    edge_labels_type=:line_id,
+    phase="1",
+    kwargs...
+)
 
     network_graph, GraphLayout, _ = create_network_graph(data, fallback_layout)
 
@@ -712,47 +726,57 @@ function plot_network_coords(
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
 
-    
+
     # FORCED NODE FORMATTING:   
     if _is_eng(data)
         _decorate_nodes!(network_graph, data)
-        node_color = [ props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-        node_marker = [ props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-        node_size = [ props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
-        edge_color = [ get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
     else
         node_color = :black
         node_marker = :circle
         node_size = 10
         edge_color = :black
+        arrow_show = false
+        arrow_marker = '➤'
+        arrow_size = 12
+        arrow_shift = 0.5
     end
 
     # Plot the graph
-    return  network_graph_plot(
-                                    network_graph;
-                                    layout=GraphLayout,
-                                    
-                                    show_node_labels=show_node_labels,
-                                    nlabels=lolabels, # add extra kwarg for lolabels to re-use nodes
-                                    node_color=node_color,
-                                    node_marker=node_marker,
-                                    node_size=node_size,
-                                    show_edge_labels=show_edge_labels,
-                                    elabels=elabels,
-                                    edge_color=edge_color,  
-                                    kwargs...
-                                )
+    return network_graph_plot(
+        network_graph;
+        layout=GraphLayout, show_node_labels=show_node_labels,
+        nlabels=nlabels, #TODO: add extra kwarg for lolabels to re-use nodes
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        show_edge_labels=show_edge_labels,
+        elabels=elabels,
+        edge_color=edge_color,
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+        kwargs...
+    )
 end
 
 function plot_network_coords!(
     data::Dict{String,Any};
     show_node_labels=false,
-    show_edge_labels = false,
+    show_edge_labels=false,
     fallback_layout=GraphMakie.Buchheim(),
-    edge_labels_type = :line_id,
+    edge_labels_type=:line_id,
     kwargs...
-    )
+)
 
     network_graph, GraphLayout, _ = create_network_graph(data, fallback_layout)
 
@@ -762,27 +786,25 @@ function plot_network_coords!(
 
     # FORCED NODE FORMATTING:   
     _decorate_nodes!(network_graph, data)
-    node_color = [ props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-    node_marker = [ props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-    node_size = [ props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+    node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
 
     _decorate_edges(network_graph, data)
-    edge_color = [ get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+    edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
     # Plot the graph
-    return  network_graph_plot!(
-                network_graph;
-                layout=GraphLayout,
-                
-                show_node_labels=show_node_labels,
-                nlabels=nlabels, 
-                node_color=node_color,
-                node_marker=node_marker,
-                node_size=node_size,
-                show_edge_labels=show_edge_labels,
-                elabels=elabels,
-                edge_color=edge_color,
-                kwargs...
-            )
+    return network_graph_plot!(
+        network_graph;
+        layout=GraphLayout, show_node_labels=show_node_labels,
+        nlabels=nlabels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        show_edge_labels=show_edge_labels,
+        elabels=elabels,
+        edge_color=edge_color,
+        kwargs...
+    )
 end
 
 """
@@ -828,14 +850,14 @@ plot_network_map(eng)
 `````
 """
 
-function plot_network_map(  
-                            data::Dict{String, Any}; 
-                            show_node_labels=false,
-                            show_edge_labels=false,
-                            edge_labels_type = :line_id,
-                            phase = "1",
-                            kwargs...
-                        )
+function plot_network_map(
+    data::Dict{String,Any};
+    show_node_labels=false,
+    show_edge_labels=false,
+    edge_labels_type=:line_id,
+    phase="1",
+    kwargs...
+)
     network_graph, GraphLayout = create_network_graph(data, GraphMakie.Buchheim())
 
     # Handle labels if required
@@ -850,30 +872,42 @@ function plot_network_map(
         @info "Plotting network map with coordinates on the map -- it is your responsibility to ensure the coordinates are at the correct place"
         if _is_eng(data)
             _decorate_nodes!(network_graph, data)
-            node_color = [ props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-            node_marker = [ props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-            node_size = [ props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+            node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+            node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+            node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
             _decorate_edges(network_graph, data)
-            edge_color = [ get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+            edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+            arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+            arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+            arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+            arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
         else
             node_color = :black
             node_marker = :circle
             node_size = 10
             edge_color = :black
-        end         
+            arrow_show = false
+            arrow_marker = '➤'
+            arrow_size = 12
+            arrow_shift = 0.5
+        end
         return network_graph_map_plot(
-                                        network_graph, GraphLayout;
-                                        nlabels=nlabels,
-                                        elabels=elabels,
-                                        show_node_labels=show_node_labels,
-                                        show_edge_labels=show_edge_labels,
-                                        node_color=node_color,
-                                        node_marker=node_marker,
-                                        node_size=node_size,
-                                        edge_color=edge_color,
-                                        kwargs...
-                                    )
-    
+            network_graph, GraphLayout;
+            nlabels=nlabels,
+            elabels=elabels,
+            show_node_labels=show_node_labels,
+            show_edge_labels=show_edge_labels,
+            node_color=node_color,
+            node_marker=node_marker,
+            node_size=node_size,
+            edge_color=edge_color,
+            arrow_show=arrow_show,
+            arrow_marker=arrow_marker,
+            arrow_size=arrow_size,
+            arrow_shift=arrow_shift,
+            kwargs...
+        )
+
     end
 
 end
@@ -888,9 +922,9 @@ $$ |  $$ |$$    $$ |$$ |      $$ |  $$ |$$ |  $$/ /    $$ |  $$ | __ $$ |$$ |  $
 $$ |__$$ |$$$$$$$$/ $$ \_____ $$ \__$$ |$$ |     /$$$$$$$ |  $$ |/  |$$ |$$ \__$$ |$$ |  $$ |
 $$    $$/ $$       |$$       |$$    $$/ $$ |     $$    $$ |  $$  $$/ $$ |$$    $$/ $$ |  $$ |
 $$$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$/  $$/       $$$$$$$/    $$$$/  $$/  $$$$$$/  $$/   $$/ 
-                                                                                             
-                                                                                             
-                                                                                             
+
+
+
 =#
 
 function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
@@ -905,69 +939,69 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
             else
                 if !isempty(node[:loads])
 
-                if length(node[:loads]) == 1
-                    if length(node[:loads][1][:connections]) == 1
-                        if node[:loads][1][:connections] == [1]
-                            node[:node_color] = :red
-                            node[:node_marker] = :dtriangle  # `↓`
-                        elseif node[:loads][1][:connections] == [2]
-                            node[:node_color] = :green
-                            node[:node_marker] = :dtriangle  # `↓`
-                        elseif node[:loads][1][:connections] == [3]
-                            node[:node_color] = :blue
-                            node[:node_marker] = :dtriangle  # `↓`
-                        elseif node[:loads][1][:connections] == [4]
-                            node[:node_color] = :black
-                            node[:node_marker] = :dtriangle  # `↓`
+                    if length(node[:loads]) == 1
+                        if length(node[:loads][1][:connections]) == 1
+                            if node[:loads][1][:connections] == [1]
+                                node[:node_color] = :red
+                                node[:node_marker] = :dtriangle  # `↓`
+                            elseif node[:loads][1][:connections] == [2]
+                                node[:node_color] = :green
+                                node[:node_marker] = :dtriangle  # `↓`
+                            elseif node[:loads][1][:connections] == [3]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :dtriangle  # `↓`
+                            elseif node[:loads][1][:connections] == [4]
+                                node[:node_color] = :black
+                                node[:node_marker] = :dtriangle  # `↓`
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        elseif length(node[:loads][1][:connections]) == 2
+                            if node[:loads][1][:connections] == [1, 4]
+                                node[:node_color] = :red
+                                node[:node_marker] = :utriangle  # `↕`
+                            elseif node[:loads][1][:connections] == [2, 4]
+                                node[:node_color] = :green
+                                node[:node_marker] = :utriangle  # `↕`
+                            elseif node[:loads][1][:connections] == [3, 4]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :utriangle  # `↕`
+                            elseif node[:loads][1][:connections] == [1, 2]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :rtriangle  # `↔`
+                            elseif node[:loads][1][:connections] == [2, 3]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :rtriangle  # `↔`
+                            elseif node[:loads][1][:connections] == [3, 1]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :rtriangle  # `↔`
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        elseif length(node[:loads][1][:connections]) == 3
+                            if node[:loads][1][:connections] == [1, 2, 3]
+                                node[:node_color] = :purple
+                                node[:node_marker] = :pentagon
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        elseif length(node[:loads][1][:connections]) == 4
+                            if node[:loads][1][:connections] == [1, 2, 3, 4]
+                                node[:node_color] = :purple
+                                node[:node_marker] = :pentagon
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
                         else
                             error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
                         end
-                    elseif length(node[:loads][1][:connections]) == 2
-                        if node[:loads][1][:connections] == [1, 4]
-                            node[:node_color] = :red
-                            node[:node_marker] = :utriangle  # `↕`
-                        elseif node[:loads][1][:connections] == [2, 4]
-                            node[:node_color] = :green
-                            node[:node_marker] = :utriangle  # `↕`
-                        elseif node[:loads][1][:connections] == [3, 4]
-                            node[:node_color] = :blue
-                            node[:node_marker] = :utriangle  # `↕`
-                        elseif node[:loads][1][:connections] == [1, 2]
-                            node[:node_color] = :blue
-                            node[:node_marker] = :rtriangle  # `↔`
-                        elseif node[:loads][1][:connections] == [2, 3]
-                            node[:node_color] = :blue
-                            node[:node_marker] = :rtriangle  # `↔`
-                        elseif node[:loads][1][:connections] == [3, 1]
-                            node[:node_color] = :blue
-                            node[:node_marker] = :rtriangle  # `↔`
-                        else
-                            error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
-                        end
-                    elseif length(node[:loads][1][:connections]) == 3
-                        if node[:loads][1][:connections] == [1, 2, 3]
-                            node[:node_color] = :purple
-                            node[:node_marker] = :pentagon
-                        else
-                            error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
-                        end 
-                    elseif length(node[:loads][1][:connections]) == 4
-                        if node[:loads][1][:connections] == [1, 2, 3, 4]
-                            node[:node_color] = :purple
-                            node[:node_marker] = :pentagon
-                        else
-                            error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
-                        end
+                        node[:marker_size] = 10
                     else
-                        error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                        node[:node_color] = :purple
+                        node[:node_marker] = :xcross
+                        node[:marker_size] = 10
                     end
-                    node[:marker_size] = 10
-                else
-                    node[:node_color] = :purple
-                    node[:node_marker] = :xcross
-                    node[:marker_size] = 10
-                end
-                    
+
                 else
                     node[:node_color] = :black
                     node[:node_marker] = :circle
@@ -984,125 +1018,146 @@ end
 function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
     if _is_eng(data)
         for (_, edge) in network_graph.eprops
-            if !isempty(edge[:t_connections])
-                if length(edge[:t_connections]) == 1
-                    if edge[:t_connections] == [1]
-                        edge[:edge_color] = :red
-                    elseif edge[:t_connections] == [2]
-                        edge[:edge_color] = :green
-                    elseif edge[:t_connections] == [3]
-                        edge[:edge_color] = :blue
-                    elseif edge[:t_connections] == [4]
-                        edge[:edge_color] = :black
+            # Set default arrow properties
+            edge[:arrow_show] = false
+            edge[:arrow_marker] = '⠀' #'↡' 
+            edge[:arrow_size] = 12
+            edge[:arrow_shift] = 0.5
+
+            if !haskey(edge, :t_connections) # I am suing this to determine that it is a transformer not a line
+                edge[:edge_color] = :gold
+                edge[:arrow_show] = true
+                edge[:arrow_marker] = 'Ꝏ'
+                edge[:arrow_size] = 20
+                edge[:arrow_shift] = 0.5
+                
+            else
+
+                if !isempty(edge[:t_connections])
+                    if length(edge[:t_connections]) == 1
+                        if edge[:t_connections] == [1]
+                            edge[:edge_color] = :red
+                        elseif edge[:t_connections] == [2]
+                            edge[:edge_color] = :green
+                        elseif edge[:t_connections] == [3]
+                            edge[:edge_color] = :blue
+                        elseif edge[:t_connections] == [4]
+                            edge[:edge_color] = :black
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
+                    elseif length(edge[:t_connections]) == 2
+                        if edge[:t_connections] == [1, 4]
+                            edge[:edge_color] = :red
+                        elseif edge[:t_connections] == [2, 4]
+                            edge[:edge_color] = :green
+                        elseif edge[:t_connections] == [3, 4]
+                            edge[:edge_color] = :blue
+                        elseif edge[:t_connections] == [1, 2]
+                            edge[:edge_color] = :blue
+                        elseif edge[:t_connections] == [2, 3]
+                            edge[:edge_color] = :blue
+                        elseif edge[:t_connections] == [3, 1]
+                            edge[:edge_color] = :blue
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
+                    elseif length(edge[:t_connections]) == 3
+                        if edge[:t_connections] == [1, 2, 3]
+                            edge[:edge_color] = :purple
+                        elseif edge[:t_connections] == [1, 2, 4]
+                            edge[:edge_color] = :blue
+                        elseif edge[:t_connections] == [2, 3, 4]
+                            edge[:edge_color] = :blue
+                        elseif edge[:t_connections] == [3, 1, 4]
+                            edge[:edge_color] = :blue
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
+                    elseif length(edge[:t_connections]) == 4
+                        if edge[:t_connections] == [1, 2, 3, 4]
+                            edge[:edge_color] = :purple
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
                     else
-                        error("Unexpected connections: $(edge[:t_connections])")
-                    end
-                elseif length(edge[:t_connections]) == 2
-                    if edge[:t_connections] == [1, 4]
-                        edge[:edge_color] = :red
-                    elseif edge[:t_connections] == [2, 4]
-                        edge[:edge_color] = :green
-                    elseif edge[:t_connections] == [3, 4]
-                        edge[:edge_color] = :blue
-                    elseif edge[:t_connections] == [1, 2]
-                        edge[:edge_color] = :blue
-                    elseif edge[:t_connections] == [2, 3]
-                        edge[:edge_color] = :blue
-                    elseif edge[:t_connections] == [3, 1]
-                        edge[:edge_color] = :blue
-                    else
-                        error("Unexpected connections: $(edge[:t_connections])")
-                    end
-                elseif length(edge[:t_connections]) == 3
-                    if edge[:t_connections] == [1, 2, 3]
-                        edge[:edge_color] = :purple
-                    elseif edge[:t_connections] == [1, 2, 4]
-                        edge[:edge_color] = :blue
-                    elseif edge[:t_connections] == [2, 3, 4]
-                        edge[:edge_color] = :blue
-                    elseif edge[:t_connections] == [3, 1, 4]
-                        edge[:edge_color] = :blue
-                    else
-                        error("Unexpected connections: $(edge[:t_connections])")
-                    end
-                elseif length(edge[:t_connections]) == 4
-                    if edge[:t_connections] == [1, 2, 3, 4]
-                        edge[:edge_color] = :purple
-                    else
-                        error("Unexpected connections: $(edge[:t_connections])")
+                        edge[:edge_color] = :gray
                     end
                 else
-                    edge[:edge_color] = :gray
+                    edge[:edge_color] = :black
+
                 end
-            else
-                edge[:edge_color] = :black
-            
             end
-        end 
+
+
+
+        end
     else
         #TODO: MATH related formatting
     end
 end
-
-
 function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any}, phase::String)
     if _is_eng(data)
         for (_, edge) in network_graph.eprops
-            if !isempty(edge[:t_connections])
-                if length(edge[:t_connections]) == 1
-                    if edge[:t_connections] == [1]
-                        edge[:edge_color] = :red
-                    elseif edge[:t_connections] == [2]
-                        edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [3]
-                        edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [4]
-                        edge[:edge_color] = :white
+            if !haskey(edge, :t_connections) # I am suing this to determine that it is a transformer not a line
+                edge[:edge_color] = :gold
+            else
+                if !isempty(edge[:t_connections])
+                    if length(edge[:t_connections]) == 1
+                        if edge[:t_connections] == [1]
+                            edge[:edge_color] = :red
+                        elseif edge[:t_connections] == [2]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [3]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [4]
+                            edge[:edge_color] = :white
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
+                    elseif length(edge[:t_connections]) == 2
+                        if edge[:t_connections] == [1, 4]
+                            edge[:edge_color] = :red
+                        elseif edge[:t_connections] == [2, 4]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [3, 4]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [1, 2]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [2, 3]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [3, 1]
+                            edge[:edge_color] = :white
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
+                    elseif length(edge[:t_connections]) == 3
+                        if edge[:t_connections] == [1, 2, 3]
+                            edge[:edge_color] = :red
+                        elseif edge[:t_connections] == [1, 2, 4]
+                            edge[:edge_color] = :red
+                        elseif edge[:t_connections] == [2, 3, 4]
+                            edge[:edge_color] = :white
+                        elseif edge[:t_connections] == [3, 1, 4]
+                            edge[:edge_color] = :red
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
+                    elseif length(edge[:t_connections]) == 4
+                        if edge[:t_connections] == [1, 2, 3, 4]
+                            edge[:edge_color] = :red
+                        else
+                            error("Unexpected connections: $(edge[:t_connections])")
+                        end
                     else
-                        error("Unexpected connections: $(edge[:t_connections])")
-                    end
-                elseif length(edge[:t_connections]) == 2
-                    if edge[:t_connections] == [1, 4]
-                        edge[:edge_color] = :red
-                    elseif edge[:t_connections] == [2, 4]
                         edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [3, 4]
-                        edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [1, 2]
-                        edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [2, 3]
-                        edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [3, 1]
-                        edge[:edge_color] = :white
-                    else
-                        error("Unexpected connections: $(edge[:t_connections])")
-                    end
-                elseif length(edge[:t_connections]) == 3
-                    if edge[:t_connections] == [1, 2, 3]
-                        edge[:edge_color] = :red
-                    elseif edge[:t_connections] == [1, 2, 4]
-                        edge[:edge_color] = :red
-                    elseif edge[:t_connections] == [2, 3, 4]
-                        edge[:edge_color] = :white
-                    elseif edge[:t_connections] == [3, 1, 4]
-                        edge[:edge_color] = :red
-                    else
-                        error("Unexpected connections: $(edge[:t_connections])")
-                    end
-                elseif length(edge[:t_connections]) == 4
-                    if edge[:t_connections] == [1, 2, 3, 4]
-                        edge[:edge_color] = :red
-                    else
-                        error("Unexpected connections: $(edge[:t_connections])")
                     end
                 else
                     edge[:edge_color] = :white
+
                 end
-            else
-                edge[:edge_color] = :white
-            
             end
-        end 
+        end
     else
         #TODO: MATH related formatting
     end
@@ -1127,8 +1182,8 @@ function _write_nlabels(network_graph, data)
     nlabels = []
     for i in 1:nv(network_graph)
         push!(nlabels,
-                         string(network_graph[i, :bus_id])
-            )
+            string(network_graph[i, :bus_id])
+        )
     end
     return nlabels
 end
@@ -1157,17 +1212,17 @@ end
 
 
 function _write_line_id_elabels(network_graph, data)
-   if _is_eng(data) 
-        [string(get_prop(network_graph, e, :line_id)) for e in edges(network_graph)] 
+    if _is_eng(data)
+        [string(get_prop(network_graph, e, :line_id)) for e in edges(network_graph)]
     else
-         [string(get_prop(network_graph, e, :branch_id)) for e in edges(network_graph)]
+        [string(get_prop(network_graph, e, :branch_id)) for e in edges(network_graph)]
     end
 end
 
 
-function _check_bases(eng_res::Dict{String, Any})
+function _check_bases(eng_res::Dict{String,Any})
     if haskey(eng_res, "bases")
-       return eng_res["bases"]["is_perunit"], eng_res["bases"]["vbase_V"], eng_res["bases"]["sbase_VA"], eng_res["bases"]["Zbase_Ω"], eng_res["bases"]["Ibase_A"]
+        return eng_res["bases"]["is_perunit"], eng_res["bases"]["vbase_V"], eng_res["bases"]["sbase_VA"], eng_res["bases"]["Zbase_Ω"], eng_res["bases"]["Ibase_A"]
     else
         return false, 0.0, 0.0, 0.0, 0.0
     end
@@ -1179,7 +1234,7 @@ function _write_results_elabels(network_graph, data, phase)
     if !_is_eng(data)
         error("The data is not an engineering model, also it has to have the results to be able to plot them the edge labels")
     end
-    
+
     try
         elabels = []
         _, vbase_V, _, _, Ibase_A = _check_bases(data)
@@ -1190,15 +1245,17 @@ function _write_results_elabels(network_graph, data, phase)
             var_v_dict = get_prop(network_graph, e, :V_f) # variable voltage
 
             if haskey(var_i_dict, Symbol(phase)) && haskey(var_v_dict, Symbol(phase))
-                push!(elabels, "V$phase =$(round(abs.(var_v_dict[Symbol(phase)])*vbase_V, digits=2)) ∠ $(round(rad2deg.(angle.(var_v_dict[Symbol(phase)])), digits=2))\n
-                I$phase=$(round(abs.(var_i_dict[Symbol(phase)])*Ibase_A, digits=2)) ∠ $(round(rad2deg.(angle.(var_i_dict[Symbol(phase)])), digits=2))"
-                                )
+                push!(
+                    elabels,
+                    "V$phase =$(round(abs.(var_v_dict[Symbol(phase)])*vbase_V, digits=2)) ∠ $(round(rad2deg.(angle.(var_v_dict[Symbol(phase)])), digits=2))\n
+     I$phase=$(round(abs.(var_i_dict[Symbol(phase)])*Ibase_A, digits=2)) ∠ $(round(rad2deg.(angle.(var_i_dict[Symbol(phase)])), digits=2))"
+                )
             else
                 push!(elabels, "N/A")
             end
         end
 
-    return elabels
+        return elabels
 
     catch e
         error("maybe the data model you passed doesn't have the results?  You need to run for example `eng_res, math, PF = pf_results(eng);` and then pass the eng_res which has results \n error is: \n $e")

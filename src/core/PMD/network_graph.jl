@@ -103,6 +103,15 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
         t_vertex = network_graph[t_bus, :bus_id]
         add_edge!(network_graph, f_vertex, t_vertex, line)
     end
+
+    # add transformers as edges based on f_bus and t_bus
+    for (_, transformer) in eng_sym[:transformer]
+        f_bus = Symbol(transformer[:bus][1])
+        t_bus = Symbol(transformer[:bus][2])
+        f_vertex = network_graph[f_bus, :bus_id]
+        t_vertex = network_graph[t_bus, :bus_id]
+        add_edge!(network_graph, f_vertex, t_vertex, transformer)
+    end
     
     # Decide on the layout
     if length(layouting_vector) > 1
