@@ -35,9 +35,9 @@ end
 
 function _is_eng(data::Dict{String, Any})
     if haskey(data, "data_model")
-        if data["data_model"] == PowerModelsDistribution.ENGINEERING
+        if string(data["data_model"]) == "ENGINEERING"
             return true
-        elseif data["data_model"] == PowerModelsDistribution.MATHEMATICAL
+        elseif string(data["data_model"]) == "MATHEMATICAL"
             return false
         else
             error("Invalid data model found in the provided model dictionary. it has to be either ENGINEERING or MATHEMATICAL")

@@ -1,6 +1,5 @@
 module Pliers
 
-
 # data structure
 using DataFrames
 using CSV
@@ -40,9 +39,9 @@ using MetaGraphs
 # using Random  
 
 # Power Distribution Tools
-using PowerModelsDistribution
-using PowerModelsDistributionStateEstimation
-using Ipopt
+#using PowerModelsDistribution
+#using PowerModelsDistributionStateEstimation
+#using Ipopt
 
 # pkg const
 const pkg_name = "Pliers"
@@ -73,7 +72,7 @@ const _STAT = Statistics
 # const _PMD = PowerModelsDistribution
 # const _PMDSE = PowerModelsDistributionStateEstimation
 
-author() = println("This package was developped by Mohamed Numair ✪ ω ✪")
+author() = println("This package was developped by Mohamed Numair (mnumair.com)")
 
 
 # included functionalities
