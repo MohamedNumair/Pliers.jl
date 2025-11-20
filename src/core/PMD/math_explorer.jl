@@ -1,4 +1,3 @@
-
 # MATH report d=====(￣▽￣*)b
 
 function math_report(math::Dict{String, Any}; detailed = false)
@@ -21,6 +20,10 @@ function math_report(math::Dict{String, Any}; detailed = false)
         math_loads_table(math)
         print("\n")
         math_gen_table(math)
+        if haskey(math, "transformer") && !isempty(math["transformer"])
+            print("\n")
+            math_transformers_table(math)
+        end
     end
 
 end
@@ -371,6 +374,92 @@ function math_gen_details(math, idx)
         gen = math["gen"][id]
         header("Generator $id")
         values = [get(gen, label, missing) for label in labels]
+        table = DataFrame(labels = labels, values = values)
+        pretty_table(table, header=["Name", "Value"])
+    end
+end
+
+# MATH TRANSFORMERS
+
+function _initiate_math_transformers_df()
+    return DataFrame(
+        index = Int[],
+        source_id = String[],
+        f_bus = Int[],
+        t_bus = Int[],
+        f_connections = Vector{Int}[],
+        t_connections = Vector{Int}[],
+        configuration = String[],
+        name = String[],
+        tm_nom = Float64[],
+        tm_set = Vector{Float64}[],
+        tm_fix = Vector{Bool}[],
+        tm_step = Vector{Float64}[],
+        status = Int[],
+        f_vbase = Float64[],
+        t_vbase = Float64[],
+        polarity = Int[],
+        sm_ub = Float64[],
+        cm_ub = Float64[]
+    )
+end
+
+function _pushing_math_transformers_df!(transformers_df, transformer_id, transformer)
+    push!(transformers_df, (
+        get(transformer, "index", missing),
+        get(transformer, "source_id", missing),
+        get(transformer, "f_bus", missing),
+        get(transformer, "t_bus", missing),
+        get(transformer, "f_connections", Int[]),
+        get(transformer, "t_connections", Int[]),
+        string(get(transformer, "configuration", missing)),
+        get(transformer, "name", missing),
+        get(transformer, "tm_nom", missing),
+        get(transformer, "tm_set", Float64[]),
+        get(transformer, "tm_fix", Bool[]),
+        get(transformer, "tm_step", Float64[]),
+        get(transformer, "status", missing),
+        get(transformer, "f_vbase", missing),
+        get(transformer, "t_vbase", missing),
+        get(transformer, "polarity", missing),
+        get(transformer, "sm_ub", missing),
+        get(transformer, "cm_ub", missing)
+    ))
+end
+
+function math_transformers_table(math::Dict{String, Any})
+    transformers = haskey(math, "transformer") ? math["transformer"] : error("No transformers found in the MATHEMATICAL data check the data model has \"transformer\" key")
+    transformers_df = _initiate_math_transformers_df()
+    for (transformer_id, transformer) in transformers
+        _pushing_math_transformers_df!(transformers_df, transformer_id, transformer)
+    end
+    header("Transformers Table ($(nrow(transformers_df)) transformers)")
+    pretty_table(sort!(transformers_df))
+    extra_keys(transformers, ["index", "source_id", "f_bus", "t_bus", "f_connections", "t_connections", "configuration", "name", "tm_nom", "tm_set", "tm_fix", "tm_step", "status", "f_vbase", "t_vbase", "polarity", "sm_ub", "cm_ub"])
+end
+
+function math_transformers_table(math::Dict{String, Any}, condition::Function)
+    transformers = haskey(math, "transformer") ? math["transformer"] : error("No transformers found in the MATHEMATICAL data check the data model has \"transformer\" key")
+    transformers_df = _initiate_math_transformers_df()
+    matched_transformer_idx = []
+    for (transformer_id, transformer) in transformers
+        if condition(transformer)
+            _pushing_math_transformers_df!(transformers_df, transformer_id, transformer)
+            push!(matched_transformer_idx, transformer_id)
+        end
+    end
+    header("Transformers Table ($(nrow(transformers_df)) transformers)")
+    pretty_table(sort!(transformers_df))
+    extra_keys(transformers, ["index", "source_id", "f_bus", "t_bus", "f_connections", "t_connections", "configuration", "name", "tm_nom", "tm_set", "tm_fix", "tm_step", "status", "f_vbase", "t_vbase", "polarity", "sm_ub", "cm_ub"])
+    return matched_transformer_idx
+end
+
+function math_transformer_details(math, idx)
+    labels = ["index", "source_id", "f_bus", "t_bus", "f_connections", "t_connections", "configuration", "name", "tm_nom", "tm_set", "tm_fix", "tm_step", "status", "f_vbase", "t_vbase", "polarity", "sm_ub", "cm_ub"]
+    for id in idx
+        transformer = math["transformer"][id]
+        header("Transformer $id")
+        values = [get(transformer, label, missing) for label in labels]
         table = DataFrame(labels = labels, values = values)
         pretty_table(table, header=["Name", "Value"])
     end
