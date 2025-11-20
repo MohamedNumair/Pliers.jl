@@ -184,7 +184,13 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     # Determine source coordinates if available 
     lon_s, lat_s = nothing, nothing
     if length(lons) > 0
+        virtual_branch = findfirst(branch -> contains(branch["name"], "_virtual_branch.voltage_source.source"), math["branch"])
+        if virtual_branch !== nothing
+            lon_s = math_sym[:bus][Symbol(math_sym[:branch][virtual_branch][:t_bus])][:lon]
+            lat_s = math_sym[:bus][Symbol(math_sym[:branch][virtual_branch][:t_bus])][:lat]
+        end
         
+        #=
         sourcebus = findfirst(bus -> contains(bus["name"], "sourcebus"), math["bus"])
         display(sourcebus)
         virtual_branch = findfirst(branch -> contains(string(branch["f_bus"]), sourcebus), math["branch"])
@@ -211,6 +217,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             lon_s = math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:t_bus])][:lon]
             lat_s = math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:t_bus])][:lat]
         end
+        =#
     end
     
     layouting_vector = []
@@ -218,6 +225,17 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     # Add `sourcebus` as the root
     virtual_bus = findfirst(bus -> contains(bus[:name], "virtual_bus.voltage_source.source"), math_sym[:bus])
 
+    display(virtual_bus)
+    if haskey(math_sym[:bus], virtual_bus)
+        add_vertex!(network_graph, math_sym[:bus][virtual_bus])
+        if length(lons) > 0 && lon_s !== nothing && lat_s !== nothing
+            push!(layouting_vector, (lon_s, lat_s))
+        end
+    else 
+        error("sourcebus not found in the bus data. Please add sourcebus to the bus data.")
+    end
+
+    #=
     if haskey(math_sym[:bus], virtual_bus)
         # Prefer the virtual bus own coordinates if they exist
         if haskey(math_sym[:bus][virtual_bus], :lon) && haskey(math_sym[:bus][virtual_bus], :lat)
@@ -238,8 +256,18 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     else 
         error("sourcebus not found in the bus data. Please add sourcebus to the bus data.")
     end
+    =#
 
     # Add the rest of the buses
+    for (_, bus) in math_sym[:bus]
+        if bus[:bus_id] != virtual_bus
+            add_vertex!(network_graph, bus)
+            if haskey(bus, :lon) && haskey(bus, :lat)
+                push!(layouting_vector, (bus[:lon], bus[:lat]))
+            end
+        end
+    end
+    #=
     for (_, bus) in math_sym[:bus]
         if (bus[:bus_id] != virtual_bus) && (bus[:bus_id] != Symbol(math_sym[:branch][Symbol(virtual_branch)][:f_bus]))
             add_vertex!(network_graph, bus)
@@ -248,6 +276,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             end
         end
     end
+    =#
 
     # Use bus_id as the indexing property
     set_indexing_prop!(network_graph, :bus_id)
@@ -263,6 +292,13 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     
     # Decide on the layout
     if length(layouting_vector) > 1
+        GraphLayout = _ -> layouting_vector
+    else
+        @warn "Note there were no coordinates found for plotting, the fallback (e.g. tree layout) layout will be used"
+        GraphLayout = fallback_layout
+    end
+    #=
+    if length(layouting_vector) > 1
         # Ensure full coverage; if partial, fall back
         if length(layouting_vector) == nv(network_graph)
             GraphLayout = _ -> layouting_vector
@@ -274,6 +310,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         @warn "Note there were no coordinates found for plotting, the fallback (e.g. tree layout) layout will be used"
         GraphLayout = fallback_layout
     end
+    =#
 
     return network_graph, GraphLayout, math_sym
 end
