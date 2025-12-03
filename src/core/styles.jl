@@ -22,26 +22,25 @@ end
     
 
 # PrettyTables Highlighting
-
-highlight_row_label = Highlighter(
-    f=(data, i, j) -> j == 1,
-    crayon=Crayon(bold=true)
+highlight_row_label = PrettyTables.TextHighlighter(
+    (data, i, j) -> j == 1,
+    crayon"bold"
 )
 
-highlight_diagonal = Highlighter(
-    f=(data, i, j) -> i == j-1,
-    crayon=Crayon(foreground = :cyan, bold=true)
+highlight_diagonal = PrettyTables.TextHighlighter(
+    (data, i, j) -> i == j-1,
+    crayon"fg:cyan bold"
 )
 
-highlight_off_diagonal = Highlighter(
-    f=(data, i, j) -> i != j-1,
-    crayon=Crayon(foreground = :white, bold=true)
+highlight_off_diagonal = PrettyTables.TextHighlighter(
+    (data, i, j) -> i != j-1,
+    crayon"fg:white bold"
 )
 
 # for the results table in PMD
-_highlight_results_status = Highlighter(
-    f=(data, i, j) -> i==1 && string(data[i,j]) == "PF_CONVERGED",
-    crayon=Crayon(foreground = :green, bold=true)
+_highlight_results_status = PrettyTables.TextHighlighter(
+    (data, i, j) -> i==1 && string(data[i,j]) == "PF_CONVERGED",
+    crayon"fg:green bold"
 )
 
 
