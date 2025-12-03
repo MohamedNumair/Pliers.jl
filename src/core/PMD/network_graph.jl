@@ -105,7 +105,8 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     end
 
     # add transformers as edges based on f_bus and t_bus
-    for (_, transformer) in eng_sym[:transformer]
+    for (t, transformer) in eng_sym[:transformer]
+        transformer[:transformer_id] = t
         f_bus = Symbol(transformer[:bus][1])
         t_bus = Symbol(transformer[:bus][2])
         f_vertex = network_graph[f_bus, :bus_id]
@@ -177,6 +178,12 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     for (l, branch) in math_sym[:branch]
         branch[:branch_id] = l
 
+    end
+
+    if haskey(math_sym, :transformer)
+        for (t, transformer) in math_sym[:transformer]
+            transformer[:transformer_id] = t
+        end
     end
 
     
@@ -288,6 +295,16 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         f_vertex = network_graph[f_bus, :bus_id]
         t_vertex = network_graph[t_bus, :bus_id]
         add_edge!(network_graph, f_vertex, t_vertex, branch)
+    end
+
+    if haskey(math_sym, :transformer)
+        for (_, transformer) in math_sym[:transformer]
+            f_bus = Symbol(transformer[:f_bus])
+            t_bus = Symbol(transformer[:t_bus])
+            f_vertex = network_graph[f_bus, :bus_id]
+            t_vertex = network_graph[t_bus, :bus_id]
+            add_edge!(network_graph, f_vertex, t_vertex, transformer)
+        end
     end
     
     # Decide on the layout

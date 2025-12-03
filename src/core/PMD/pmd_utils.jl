@@ -118,11 +118,12 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
             
             # Create current dictionary based on available keys
             if haskey(load, "crd_bus") && haskey(load, "cid_bus")
-                load["current_bus"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
-                load["power_bus"] = Dict(string(term) => pf_sol["bus"][string(math["load"][l]["load_bus"])]["voltage"][string(term)] * load["current_bus"][string(term)] for (i, term) in enumerate(terminals))
+                load["current"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
+                # load["current_bus"] = Dict(string(term) => load["crd_bus"][i] + load["cid_bus"][i]*im for (i, term) in enumerate(terminals))
+                # load["power_bus"] = Dict(string(term) => pf_sol["bus"][string(math["load"][l]["load_bus"])]["voltage"][string(term)] * load["current_bus"][string(term)] for (i, term) in enumerate(terminals))
             elseif haskey(load, "crd") && haskey(load, "cid")
                 load["current"] = Dict(string(term) => load["crd"][i] + load["cid"][i]*im for (i, term) in enumerate(terminals))
-                load["power"] = Dict(string(term) => pf_sol["bus"][string(math["load"][l]["load_bus"])]["voltage"][string(term)] * load["current"][string(term)] for (i, term) in enumerate(terminals))
+                # load["power"] = Dict(string(term) => pf_sol["bus"][string(math["load"][l]["load_bus"])]["voltage"][string(term)] * load["current"][string(term)] for (i, term) in enumerate(terminals))
             end
 
             # Create power dictionary based on available keys
@@ -228,7 +229,7 @@ Separate the phase and neutral voltages from the power flow solution for a given
 
 """
 function _separate_phase_neutral_voltages(pf_sol, bus_index)
-    phase_voltage = ComplexF64[]
+    phase_voltage = [] # ComplexF64[]
     for i in 1:3 
         if haskey(pf_sol["bus"][bus_index]["voltage"], string(i))
             push!(phase_voltage, pf_sol["bus"][bus_index]["voltage"][string(i)])
@@ -238,7 +239,7 @@ function _separate_phase_neutral_voltages(pf_sol, bus_index)
     neutral_voltage = ComplexF64[]
 
     if haskey(pf_sol["bus"][bus_index]["voltage"], string(_N_IDX))  
-        neutral_voltage = pf_sol["bus"][bus_index]["voltage"][string(_N_IDX)]
+        neutral_voltage = pf_sol["bus"][bus_index]["voltage"]["4"] # pf_sol["bus"][bus_index]["voltage"][string(_N_IDX)]
     else 
         neutral_voltage = 0 + 0im # assuming grounded
     end
@@ -613,6 +614,7 @@ function plot_symmetrical_components(bus_dict::Dict{String, Any};     makie_back
 end
 
 
+#=
 function move_coords_eng_to_math!(eng, math)
 
     if !haskey(eng, "bus") || !haskey(math, "bus_lookup")
@@ -629,3 +631,4 @@ function move_coords_eng_to_math!(eng, math)
     end
 
 end
+=#

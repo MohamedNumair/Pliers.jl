@@ -19,8 +19,9 @@ eng_report(eng)
 ```
 """
 function eng_report(eng::Dict{String, Any}; detailed = false)
-    print(UNDERLINE(BLUE_FG("Report for the ",   BOLD("$(get(eng, "data_model", nothing))"),
-     " model of the network  ", BOLD("$(get(eng, "name", nothing))")," prased from ",BOLD("$(split(get(eng,"files",[nothing])[1],"/")[end])"), " \n")))
+    files = get(eng, "files", String[])
+    parsed_file = isempty(files) ? "unknown" : split(files[1], "/")[end]
+    print(UNDERLINE(BLUE_FG("Report for the ",   BOLD("$(get(eng, "data_model", nothing))"), " model of the network  ", BOLD("$(get(eng, "name", nothing))")," prased from ",BOLD("$(parsed_file)"), " \n")))
 
     print(WHITE_FG("This network has:\n"))
     print("             $(BOLD("$(length(get(eng, "voltage_source", [])))")) voltage sources, \n")

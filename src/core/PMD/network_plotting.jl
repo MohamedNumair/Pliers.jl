@@ -540,7 +540,8 @@ function plot_network_tree(
         node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show_vec = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show = any(arrow_show_vec)
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
         arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -627,7 +628,8 @@ function plot_network_tree!(
         node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show_vec = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show = any(arrow_show_vec)
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
         arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -735,7 +737,8 @@ function plot_network_coords(
         node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show_vec = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show = any(arrow_show_vec)
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
         arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -877,7 +880,8 @@ function plot_network_map(
             node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
             _decorate_edges(network_graph, data)
             edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-            arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+            arrow_show_vec = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+            arrow_show = any(arrow_show_vec)
             arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
             arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
             arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -998,8 +1002,8 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                         node[:marker_size] = 10
                     else
                         node[:node_color] = :purple
-                        node[:node_marker] = :xcross
-                        node[:marker_size] = 10
+                        node[:node_marker] = '↡' #:xcross
+                        node[:marker_size] = 25
                     end
 
                 else
@@ -1020,7 +1024,7 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
         for (_, edge) in network_graph.eprops
             # Set default arrow properties
             edge[:arrow_show] = false
-            edge[:arrow_marker] = '⠀' #'↡' 
+            edge[:arrow_marker] = '⠀' #'⠀' or `↡`
             edge[:arrow_size] = 12
             edge[:arrow_shift] = 0.5
 
@@ -1212,11 +1216,19 @@ end
 
 
 function _write_line_id_elabels(network_graph, data)
-    if _is_eng(data)
-        [string(get_prop(network_graph, e, :line_id)) for e in edges(network_graph)]
-    else
-        [string(get_prop(network_graph, e, :branch_id)) for e in edges(network_graph)]
+    elabels = String[]
+    for e in edges(network_graph)
+        if has_prop(network_graph, e, :transformer_id)
+            push!(elabels, string(get_prop(network_graph, e, :transformer_id)))
+        elseif has_prop(network_graph, e, :line_id)
+            push!(elabels, string(get_prop(network_graph, e, :line_id)))
+        elseif has_prop(network_graph, e, :branch_id)
+            push!(elabels, string(get_prop(network_graph, e, :branch_id)))
+        else
+            push!(elabels, "")
+        end
     end
+    return elabels
 end
 
 

@@ -50,7 +50,7 @@ function calc_bases_from_dict(data::Dict{String,Any}; return_dict = false)
     vbase_V = first(data["settings"]["vbases_default"]).second*data["settings"]["voltage_scale_factor"]
     vbase_ll = vbase_V*sqrt(3)
     sbase_VA = data["settings"]["sbase_default"]*data["settings"]["power_scale_factor"]
-    Zbase_Ω = vbase_ll^2/sbase_VA
+    Zbase_Ω = vbase_V^2/sbase_VA
     Ibase_A = sbase_VA/vbase_V
 
     Ibase_A_ll = sbase_VA/(sqrt(3)*vbase_ll)
@@ -573,6 +573,7 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::Integer;
                     location::Tuple{Int, Int} = (1, 1),
                     fig_size=(800, 800),
                     keep_pu::Bool=false,
+                    rlimits=(0, 1.2)
                    )
     if isnothing(figure) 
         makie_backend.activate!()
@@ -588,6 +589,9 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::Integer;
     ax = PolarAxis(f[location[1], location[2]],
                    title="Bus $bus_id Phasors",
                    thetaticks=(radian_ticks, tick_labels),
+                   rlimits=rlimits,
+                   rticks = [0.5, 1.0],
+
                   )
 
     bus_phasor!(ax, eng, bus_id, keep_pu=keep_pu)

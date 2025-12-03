@@ -11,7 +11,7 @@ function get_m_n_dof(data::Dict)
     
     @assert !isempty(non_zero_inj_buses) "This network has no active connected component, no point doing state estimation"
     
-    n = sum([length(setdiff(bus["terminals"],_N_IDX)) for (b, bus) in data["bus"] if b ∈ non_zero_inj_buses ])*2-length(setdiff(ref_bus[1]["terminals"],_N_IDX)) # system variables: two variables per bus (e.g., angle and magnitude) per number of phases on the bus minus the angle variable(s) of a ref bus, which are fixed
+    n = sum([length(setdiff(bus["terminals"],5)) for (b, bus) in data["bus"] if b ∈ non_zero_inj_buses ])*2-length(setdiff(ref_bus[1]["terminals"],5)) # system variables: two variables per bus (e.g., angle and magnitude) per number of phases on the bus minus the angle variable(s) of a ref bus, which are fixed
     #n = sum([length(bus["terminals"]) for (b, bus) in data["bus"] if b ∈ non_zero_inj_buses ])*2-length(ref_bus[1]["terminals"]) # system variables: two variables per bus (e.g., angle and magnitude) per number of phases on the bus minus the angle variable(s) of a ref bus, which are fixed
     #@show n
     m = sum([length(meas["dst"]) for (_, meas) in data["meas"]])
@@ -46,11 +46,14 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
     printstyled(" n : $(n) \n", color=:green)
     dof > 0 ? printstyled(" Degrees of freedom : $(dof) \n", color=:green) : printstyled(" Degrees of freedom : $(dof) \n", color=:red)
     
-    @suppress display(instantiate_mc_model(
-        math_en,
-        pm_form,
-        PowerModelsDistributionStateEstimation.build_mc_se;
-    ).model)
+    # try
+    # @suppress display(instantiate_mc_model(
+    #     math_en,
+    #     pm_form,
+    #     PowerModelsDistributionStateEstimation.build_mc_se;
+    # ).model)
+    # catch e
+    # end
 
     if !isapprox(mape, 0, atol=0.05)
         if !isnothing(APEs_df)
@@ -122,9 +125,9 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
 
     # Define headers
     header = ["Meas", "Res1", "Res2", "Res3", "Res4"]
-    res_heatmap = pretty_table(df_meas_res, header=header, header_crayon=crayon"fg:yellow", highlighters=Tuple(highlighters), tf=tf_unicode)
+    res_heatmap = pretty_table(df_meas_res, header=header, header_crayon=crayon"fg:yellow", highlighters=Tuple(highlighters), tf=tf_unicode, display_size=(-1,-1))
 
-    df_legend = DataFrame(
+    df_legend = DataFrame( 
         Lower_Bound = lowerBounds,
         Upper_Bound = uppoerBounds,
     )
@@ -377,7 +380,7 @@ each bus and terminal, filters out any `NaN` values, and computes the mean APE.
   dictionaries with nested keys for buses and their respective voltages.
 - The `dictify_solution!` function is used to process the solutions before comparison.
 """
-function _calculate_MAPE(SE_RES, PF_RES, math)
+function _calculate_MAPE(SE_RES, PF_RES, math; element = "bus", quantity = "voltage")
 
     se_sol  = deepcopy(SE_RES["solution"])
     pf_sol = deepcopy(PF_RES["solution"])
@@ -390,27 +393,27 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
 
     Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
     APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
-    for (b,bus) in se_sol["bus"]
+    for (b,Component) in se_sol[element]
 
-        for (term,Vse) in bus["voltage"] 
+        for (term,Vse) in Component[quantity] 
             if term == "4"
                 continue
             end
             # println("Bus    :",b)
             # println("Term   :",term)
             # println("Vse   :",Vse)
-            # println("Vpf     :", pf_sol["bus"][b]["voltage"][term])
+            # println("Vpf     :", pf_sol[element][b][element][term])
 
 
-            #haskey(bus["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-            #haskey(pf_sol["bus"][b]["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-            Vpf = pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-            #Vpf = haskey(pf_sol["bus"][b]["voltage"], "4")  ?  pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]   : pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-            #Vse = haskey(bus["voltage"] , "4") ? Vse - bus["voltage"]["4"] : Vse
+            #haskey(Component[element], "4") ? nothing : Component[element]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
+            #haskey(pf_sol[element][b][element], "4") ? nothing : Component[element]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
+            Vpf = pf_sol[element][b][quantity][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
+            #Vpf = haskey(pf_sol[element][b][element], "4")  ?  pf_sol["Component"][b][element][term] -  pf_sol["Component"][b][element]["4"]   : pf_sol["Component"][b][element][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
+            #Vse = haskey(Component[element] , "4") ? Vse - Component[element]["4"] : Vse
             # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
             #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
             #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
-            APE = (abs.(Vse .- Vpf) ./ abs.(Vpf) ) * 100
+            APE = (abs(abs(Vse) - abs(Vpf)) / abs(Vpf) ) * 100 
             Error = Vse - Vpf
             push!(APEs,APE)
             push!(Errors,Error)
@@ -428,6 +431,73 @@ function _calculate_MAPE(SE_RES, PF_RES, math)
     return mean_APE, APEs_df, Errors_df
 
 end
+
+function _calculate_MAPE_P_Q(SE_RES, PF_RES, math; element = "load", quantity = "power")
+
+    se_sol  = deepcopy(SE_RES["solution"])
+    pf_sol = deepcopy(PF_RES["solution"])
+
+    dictify_solution!(pf_sol, math)
+    dictify_solution!(se_sol, math)
+
+    P_APEs = [] 
+    Q_APEs = []
+    Errors = [] 
+
+    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
+    P_APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
+    Q_APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
+    for (b,Component) in se_sol[element]
+
+        for (term,Sse) in Component[quantity] 
+            if term == "4"
+                continue
+            end
+
+            Spf = pf_sol[element][b][quantity*"_bus"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
+
+            Ppf = real(Spf)
+            Qpf = imag(Spf)
+
+            Pse = real(Sse)
+            Qse = imag(Sse)
+
+            P_APE = (abs(abs(Pse) - abs(Ppf)) / abs(Ppf) ) * 100
+            if P_APE > 100
+                warning_text("High P_APE detected at Bus: $b, Terminal: $term, Pse: $Pse, Ppf: $Ppf, Sse: $Sse, Spf: $Spf")
+            end
+            Q_APE = (abs(abs(Qse) - abs(Qpf)) / abs(Qpf) ) * 100
+
+            Error = Sse - Spf
+            
+            push!(P_APEs,P_APE)
+            push!(Q_APEs,Q_APE)
+
+            push!(Errors,Error)
+
+
+            push!(P_APEs_df, (b, term, P_APE))
+            push!(Q_APEs_df, (b, term, Q_APE))
+            push!(Errors_df, (b, term, Error))
+
+        end
+
+    end
+
+    P_APEs_nonan = filter(x -> !isnan(x), P_APEs)
+    Q_APEs_nonan = filter(x -> !isnan(x), Q_APEs)
+    
+    mean_P_APE = mean(P_APEs_nonan)
+    mean_Q_APE = mean(Q_APEs_nonan)
+
+
+    return mean_P_APE, P_APEs_df, mean_Q_APE, Q_APEs_df, Errors_df
+
+end
+
+
+
+
 
 function _calculate_MAPE_toNeutral(SE_RES, PF_RES, math)
 
@@ -463,7 +533,7 @@ function _calculate_MAPE_toNeutral(SE_RES, PF_RES, math)
             # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
             #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
             #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
-            APE = (abs.(Vse .- Vpf) ./ abs.(Vpf) ) * 100
+            APE = (abs(abs(Vse) - abs(Vpf)) / abs(Vpf) ) * 100
             Error = Vse - Vpf
             push!(APEs,APE)
             push!(Errors,Error)

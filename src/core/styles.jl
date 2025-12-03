@@ -1,6 +1,5 @@
 # Printing Styles
 
-
 function header(text::String)
     print(BOLD(UNDERLINE(BLUE_FG("$text\n"))))
 end
@@ -22,28 +21,84 @@ end
     
 
 # PrettyTables Highlighting
-
-highlight_row_label = Highlighter(
-    f=(data, i, j) -> j == 1,
-    crayon=Crayon(bold=true)
+highlight_row_label = PrettyTables.TextHighlighter(
+    (data, i, j) -> j == 1,
+    crayon"bold"
 )
 
-highlight_diagonal = Highlighter(
-    f=(data, i, j) -> i == j-1,
-    crayon=Crayon(foreground = :cyan, bold=true)
+highlight_diagonal = PrettyTables.TextHighlighter(
+    (data, i, j) -> i == j-1,
+    crayon"fg:cyan bold"
 )
 
-highlight_off_diagonal = Highlighter(
-    f=(data, i, j) -> i != j-1,
-    crayon=Crayon(foreground = :white, bold=true)
+highlight_off_diagonal = PrettyTables.TextHighlighter(
+    (data, i, j) -> i != j-1,
+    crayon"fg:white bold"
 )
 
 # for the results table in PMD
-_highlight_results_status = Highlighter(
-    f=(data, i, j) -> i==1 && string(data[i,j]) == "PF_CONVERGED",
-    crayon=Crayon(foreground = :green, bold=true)
+_highlight_results_status = PrettyTables.TextHighlighter(
+    (data, i, j) -> i==1 && string(data[i,j]) == "PF_CONVERGED",
+    crayon"fg:green bold"
 )
 
+
+# COLORS
+
+pastel_colors = [
+    :mistyrose,
+    :lavender,
+    :honeydew,
+    :lightcyan,
+    :thistle,
+    :powderblue,
+    :lightpink,
+    :paleturquoise,
+    :palegreen,
+    :lightgoldenrodyellow,
+    :lemonchiffon,
+    :aliceblue,
+    :azure,
+    :oldlace,
+    :cornsilk,
+    :seashell,
+    :blanchedalmond,
+    :mintcream,
+    :beige,
+    :papayawhip
+]
+
+ieee_colors = [
+    :black,            # Always good for the first/main line
+    :dimgray,          # Soft dark gray
+    :dodgerblue,       # Distinct blue, good contrast
+    :orange,           # High contrast, visible in grayscale
+    :forestgreen,      # Green with good contrast
+    :firebrick,        # Muted red, distinguishable
+    :goldenrod,        # Deep yellow, distinguishable from orange
+    :goldenrod1,      # yellow/orange accent
+    :slateblue,        # Distinct blue-violet
+    :darkcyan,         # Blue-green, not too saturated
+    :sienna,          # Soft brown, visible in grayscale
+    :tomato,          # red
+    :gray60,          # gray
+]
+
+
+
+#=
+Black:         (0, 0, 0)
+DimGray:       (105, 105, 105)
+DodgerBlue:    (30, 144, 255)
+Orange:        (255, 165, 0)
+ForestGreen:   (34, 139, 34)
+Firebrick:     (178, 34, 34)
+Goldenrod:     (218, 165, 32)
+SlateBlue:     (106, 90, 205)
+DarkCyan:      (0, 139, 139)
+Sienna:        (160, 82, 45)
+
+=#
 
 #=
 
@@ -82,6 +137,8 @@ function set_journal_theme(; fontsize = nothing,      )
     phase_green = :darkgreen
     phase_blue = :darkblue
     neutral_black = :black
+
+
 try
     global fontTermesRegular =  joinpath(dirname(dirname(pathof(Pliers))), "assets", "fonts", "gyre-opentype", "texgyretermes-regular.otf")
     global fontTermesBold =  joinpath(dirname(dirname(pathof(Pliers))), "assets", "fonts", "gyre-opentype", "texgyretermes-bold.otf")
@@ -122,16 +179,16 @@ end
                                     cycle = [:color, :marker],
                                 ),
 
-                                Legend = (
-                                    #labelsize = fontsize,
-                                    markersize = 4,
-                                    framevisible = true,
-                                    colgap = -1,
-                                    rowgap = -3,
+                                # Legend = (
+                                #     #labelsize = fontsize,
+                                #     markersize = 4,
+                                #     framevisible = true,
+                                #     colgap = -1,
+                                #     rowgap = -3,
                                     
                                     
                                     
-                                    ),
+                                #     ),
 
                                 
                                 #palette = (color = [:red, :green, :blue, :black, :orange, :purple, :yellow, :cyan, :magenta, :gray]),
