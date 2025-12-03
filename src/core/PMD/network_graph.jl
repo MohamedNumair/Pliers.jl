@@ -5,13 +5,13 @@ end
 """
     create_network_graph_eng(eng::Dict{String,Any}, fallback_layout) -> MetaDiGraph, Function, Dict{Symbol,Any}
 """
-function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout) 
+function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     eng_sym = convert_keys_to_symbols(deepcopy(eng))
     network_graph = MetaDiGraph()
-    
+
     lons = []
     lats = []
-    
+
     # Add bus keys as :bus_id and collect coordinates if present # and enrich the buses with loads and shunts connected to them
     for (b, bus) in eng_sym[:bus]
         bus[:bus_id] = b
@@ -19,28 +19,28 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
         bus[:shunts] = []
         # attach loads
         if haskey(eng_sym, :load)
-        for (_,load) in eng_sym[:load]
-            if Symbol(load[:bus]) == bus[:bus_id]
-                push!(bus[:loads], load)
+            for (_, load) in eng_sym[:load]
+                if Symbol(load[:bus]) == bus[:bus_id]
+                    push!(bus[:loads], load)
+                end
             end
-        end
         end
         # attach shunts
         if haskey(eng_sym, :shunt)
-        for (_,shunt) in eng_sym[:shunt]
-            if Symbol(shunt[:bus]) == bus[:bus_id]
-                push!(bus[:shunts], shunt)
+            for (_, shunt) in eng_sym[:shunt]
+                if Symbol(shunt[:bus]) == bus[:bus_id]
+                    push!(bus[:shunts], shunt)
+                end
             end
-        end
         end
 
         # attach gens
         if haskey(eng_sym, :voltage_source)
-        for (_,voltage_source) in eng_sym[:voltage_source]
-            if Symbol(voltage_source[:bus]) == bus[:bus_id]
-                bus[:voltage_sources] = voltage_source
+            for (_, voltage_source) in eng_sym[:voltage_source]
+                if Symbol(voltage_source[:bus]) == bus[:bus_id]
+                    bus[:voltage_sources] = voltage_source
+                end
             end
-        end
         end
 
 
@@ -48,8 +48,8 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
             push!(lons, bus[:lon])
             push!(lats, bus[:lat])
         end
-    end    
-    
+    end
+
     for (l, line) in eng_sym[:line]
         line[:line_id] = l
         line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])]
@@ -59,7 +59,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     ### DETERMINE THE ROOT BUS
     sourcebus = eng_sym[:voltage_source][:source][:bus]
-    
+
     # Determine source coordinates if available # and enrich the lines with the linecodes details
     lon_s, lat_s = nothing, nothing
     if length(lons) > 0
@@ -69,7 +69,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
             lat_s = eng_sym[:bus][Symbol(eng_sym[:line][source_line][:t_bus])][:lat]
         end
     end
-    
+
     layouting_vector = []
 
     # Add `sourcebus` as the root
@@ -78,7 +78,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
         if length(lons) > 0 && lon_s !== nothing && lat_s !== nothing
             push!(layouting_vector, (lon_s, lat_s))
         end
-    else 
+    else
         error("sourcebus not found in the bus data. Please add sourcebus to the bus data.")
     end
 
@@ -105,14 +105,15 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     end
 
     # add transformers as edges based on f_bus and t_bus
-    for (_, transformer) in eng_sym[:transformer]
-        f_bus = Symbol(transformer[:bus][1])
-        t_bus = Symbol(transformer[:bus][2])
-        f_vertex = network_graph[f_bus, :bus_id]
-        t_vertex = network_graph[t_bus, :bus_id]
-        add_edge!(network_graph, f_vertex, t_vertex, transformer)
+    if haskey(eng_sym, :transformer)
+        for (_, transformer) in eng_sym[:transformer]
+            f_bus = Symbol(transformer[:bus][1])
+            t_bus = Symbol(transformer[:bus][2])
+            f_vertex = network_graph[f_bus, :bus_id]
+            t_vertex = network_graph[t_bus, :bus_id]
+            add_edge!(network_graph, f_vertex, t_vertex, transformer)
+        end
     end
-    
     # Decide on the layout
     if length(layouting_vector) > 1
         GraphLayout = _ -> layouting_vector
@@ -128,42 +129,42 @@ end
 """
     create_network_graph_math(math::Dict{String,Any}, fallback_layout) -> MetaDiGraph, Function, Dict{Symbol,Any}
 """
-function create_network_graph_math(math::Dict{String,Any}, fallback_layout) 
+function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     math_sym = convert_keys_to_symbols(deepcopy(math))
     network_graph = MetaDiGraph()
 
     lons = []
     lats = []
-    
+
     # Add bus keys as :bus_id and collect coordinates if present # and enrich the buses with loads and shunts connected to them
     for (b, bus) in math_sym[:bus]
         bus[:bus_id] = b
         bus[:loads] = []
         bus[:shunts] = []
         if haskey(math_sym, :load)
-        for (l,load) in math_sym[:load]
-            if Symbol(load[:load_bus]) == bus[:bus_id]
-                push!(bus[:loads], load)
+            for (l, load) in math_sym[:load]
+                if Symbol(load[:load_bus]) == bus[:bus_id]
+                    push!(bus[:loads], load)
+                end
             end
-        end
         end
 
         if haskey(math_sym, :shunt)
-        for (_,shunt) in math_sym[:shunt]
-            if Symbol(shunt[:shunt_bus]) == bus[:bus_id]
-                push!(bus[:shunts], shunt)
+            for (_, shunt) in math_sym[:shunt]
+                if Symbol(shunt[:shunt_bus]) == bus[:bus_id]
+                    push!(bus[:shunts], shunt)
+                end
             end
-        end
         end
 
         # gen 
 
         if haskey(math_sym, :gen)
-        for (_,gen) in math_sym[:gen]
-            if Symbol(gen[:gen_bus]) == bus[:bus_id]
-                bus[:gens] = gen
+            for (_, gen) in math_sym[:gen]
+                if Symbol(gen[:gen_bus]) == bus[:bus_id]
+                    bus[:gens] = gen
+                end
             end
-        end
         end
 
 
@@ -171,20 +172,20 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             push!(lons, bus[:lon])
             push!(lats, bus[:lat])
         end
-    end    
-    
+    end
+
     # Add branch keys as :branch_id 
     for (l, branch) in math_sym[:branch]
         branch[:branch_id] = l
 
     end
 
-    
+
 
     # Determine source coordinates if available 
     lon_s, lat_s = nothing, nothing
     if length(lons) > 0
-        
+
         sourcebus = findfirst(bus -> contains(bus["name"], "sourcebus"), math["bus"])
         display(sourcebus)
         virtual_branch = findfirst(branch -> contains(string(branch["f_bus"]), sourcebus), math["branch"])
@@ -212,7 +213,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             lat_s = math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:t_bus])][:lat]
         end
     end
-    
+
     layouting_vector = []
 
     # Add `sourcebus` as the root
@@ -226,16 +227,16 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
 
         elseif lon_s !== nothing && lat_s !== nothing
             # fallback to inferred source branch target coords
-            
+
             add_vertex!(network_graph, math_sym[:bus][virtual_bus])
             push!(layouting_vector, (lon_s, lat_s))
 
             add_vertex!(network_graph, math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:f_bus])])
             push!(layouting_vector, (lon_s, lat_s))
-    
+
 
         end
-    else 
+    else
         error("sourcebus not found in the bus data. Please add sourcebus to the bus data.")
     end
 
@@ -260,7 +261,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         t_vertex = network_graph[t_bus, :bus_id]
         add_edge!(network_graph, f_vertex, t_vertex, branch)
     end
-    
+
     # Decide on the layout
     if length(layouting_vector) > 1
         # Ensure full coverage; if partial, fall back
@@ -292,7 +293,7 @@ end
 
 function get_graph_edge(G, edge_id)
     if _is_eng(G)
-        Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)  
+        Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)
     else
         Eid = findall(e -> e[:branch_id] == Symbol(edge_id), G.eprops)
     end
@@ -300,7 +301,7 @@ function get_graph_edge(G, edge_id)
 end
 function get_graph_edge(G, edge_id, key)
     if _is_eng(G)
-        Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)  
+        Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)
     else
         Eid = findall(e -> e[:branch_id] == Symbol(edge_id), G.eprops)
     end
