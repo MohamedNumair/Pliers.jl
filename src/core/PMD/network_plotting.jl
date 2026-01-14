@@ -400,9 +400,9 @@ function network_graph_map_plot(
     map_window_coords = Rect2f(center_lon - zoom_lon / 2, center_lat - zoom_lat / 2, zoom_lon, zoom_lat)
 
 
-    m = Tyler.Map(map_window_coords; provider=tiles_provider, crs=Tyler.wgs84)
-    hidedecorations!(m.axis)
-    hidespines!(m.axis)
+    # m = Tyler.Map(map_window_coords; provider=tiles_provider, crs=Tyler.wgs84)
+    # hidedecorations!(m.axis)
+    # hidespines!(m.axis)
 
 
 

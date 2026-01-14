@@ -704,7 +704,7 @@ vphasor!(scene, v2, arrowcolor = :green, label = "V2")
 vphasor!(scene, v3, arrowcolor = :blue, label = "V3")
 """
 # VPhasor recipe: plots a complex number as an arrow from origin.
-MakieCore.@recipe(VPhasor, value) do scene
+@recipe(VPhasor, value) do scene
     Theme(
         arrowcolor = Makie.theme(scene, :linecolor), # Default to current linecolor from the theme
         arrowsize = 15,

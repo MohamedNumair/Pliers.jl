@@ -13,7 +13,7 @@ using PrettyTables
 
 # plotting packages
 using Makie
-using MakieCore
+# using MakieCore
 using CairoMakie
 using WGLMakie
 if Sys.iswindows()
@@ -22,10 +22,10 @@ end
 using GraphMakie
 using GeoMakie
 using Proj
-using Tyler
-using Tyler.TileProviders
-using Tyler.MapTiles
-using Tyler.Extents
+# using Tyler
+# using Tyler.TileProviders
+# using Tyler.MapTiles
+# using Tyler.Extents
 
 # data analysis packages
 using Statistics
