@@ -24,7 +24,7 @@ end
 
 
 #TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
-function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE_N = nothing, APEs_df = nothing, pm_form = PowerModelsDistribution.IVRENPowerModel)
+function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE_N = nothing, APEs_df = nothing)#pm_form = PowerModelsDistribution.IVRENPowerModel)
 
     se_sol_en = SE_en["solution"]
     solve_time = SE_en["solve_time"]
@@ -46,11 +46,11 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
     printstyled(" n : $(n) \n", color=:green)
     dof > 0 ? printstyled(" Degrees of freedom : $(dof) \n", color=:green) : printstyled(" Degrees of freedom : $(dof) \n", color=:red)
     
-    @suppress display(instantiate_mc_model(
-        math_en,
-        pm_form,
-        PowerModelsDistributionStateEstimation.build_mc_se;
-    ).model)
+    # @suppress display(instantiate_mc_model(
+    #     math_en,
+    #     pm_form,
+    #     PowerModelsDistributionStateEstimation.build_mc_se;
+    # ).model)
 
     if !isapprox(mape, 0, atol=0.05)
         if !isnothing(APEs_df)
@@ -105,16 +105,16 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
     colors = [crayon"green bold", crayon"cyan bold", crayon"blue bold", crayon"magenta bold", crayon"yellow bold", crayon"red bold"]
 
     # Create highlighters for each interval
-    highlighters = []
+    highlighters = TextHighlighter[]
     for i in 1:num_intervals
         lower_bound = lowerBounds[i]
         upper_bound = uppoerBounds[i]
-        push!(highlighters, Highlighter(
+        push!(highlighters, TextHighlighter(
             (data, row, col) -> col in 2:5 && data[row, col] >= lower_bound && data[row, col] < upper_bound,
             colors[i]
         ))
     end
-    hideNan_hl = Highlighter(       
+    hideNan_hl = TextHighlighter(       
         (data, i, j) -> (j ∈ collect(2:5) && isnan(data[i, j])),
         crayon"dark_gray conceal"
     )
@@ -122,23 +122,26 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
 
     # Define headers
     header = ["Meas", "Res1", "Res2", "Res3", "Res4"]
-    res_heatmap = pretty_table(df_meas_res, header=header, header_crayon=crayon"fg:yellow", highlighters=Tuple(highlighters), tf=tf_unicode)
-
+    try
+        res_heatmap = pretty_table(df_meas_res; column_labels=header, highlighters=highlighters)
+    catch
+        display(df_meas_res)
+    end
     df_legend = DataFrame(
         Lower_Bound = lowerBounds,
         Upper_Bound = uppoerBounds,
     )
 
-    legend_highlighters = []
+    legend_highlighters = TextHighlighter[]
     for i in 1:num_intervals
-        push!(legend_highlighters, Highlighter(
+        push!(legend_highlighters, TextHighlighter(
             (data, row, col) -> (row == i),
             colors[i]
         ))
     end
     if show_legend
         println("Legend:") 
-        legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=Tuple(legend_highlighters), tf=tf_unicode)
+        legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=legend_highlighters)
         println(legend)
     end
 
