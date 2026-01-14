@@ -29,12 +29,16 @@ function eng_report(eng::Dict{String, Any}; detailed = false)
     print("             $(BOLD("$(length(get(eng, "line", [])))")) lines, \n")
     print("             $(BOLD("$(length(get(eng, "linecode", [])))")) linecodes, \n")
     print("             $(BOLD("$(length(get(eng, "load", [])))")) loads, \n")
+    print("             $(BOLD("$(length(get(eng, "transformer", [])))")) transformers, \n")
     print("             $(BOLD("$(length(get(eng, "time_series", [])))")) time series data points.\n")
 
 if detailed == true
     buses_table(eng)
     lines_table(eng)
     loads_table(eng)
+    if haskey(eng, "transformer") && length(eng["transformer"]) > 0
+        transformers_table(eng)
+    end
 end
 
 end
@@ -418,6 +422,125 @@ function linecode_table(eng::Dict{String, Any}, linecodes)
 end
 
 
+## transformers_table
+
+function _init_transformers_df()
+    return DataFrame(   
+                        transformer_id = String[],
+                        name = String[],
+                        source_id = String[],
+                        bus = Vector{String}[],
+                        connections = Vector{Vector{Int}}[],
+                        vm_nom = Vector{Float64}[],
+                        sm_nom = Vector{Float64}[],
+                        configuration = Vector{String}[],
+                        xsc = Vector{Float64}[],
+                        rw = Vector{Float64}[],
+                        noloadloss = Float64[],
+                        cmag = Float64[],
+                        tm_set = Vector{Vector{Float64}}[],
+                        tm_fix = Vector{Vector{Bool}}[],
+                        polarity = Vector{Int}[],
+                        status = String[]
+                    )
+end
+
+function _push_transformers_df!(transformers_df, transformer_id, transformer)
+    push!(transformers_df, (   
+                        transformer_id,
+                        get(transformer, "name", ""),
+                        get(transformer, "source_id", ""),
+                        get(transformer, "bus", String[]),
+                        get(transformer, "connections", Vector{Int}[]),
+                        get(transformer, "vm_nom", Float64[]),
+                        get(transformer, "sm_nom", Float64[]),
+                        [string(c) for c in get(transformer, "configuration", [])],
+                        get(transformer, "xsc", Float64[]),
+                        get(transformer, "rw", Float64[]),
+                        get(transformer, "noloadloss", 0.0),
+                        get(transformer, "cmag", 0.0),
+                        get(transformer, "tm_set", Vector{Float64}[]),
+                        get(transformer, "tm_fix", Vector{Bool}[]),
+                        get(transformer, "polarity", Int[]),
+                        string(get(transformer, "status", ""))
+                    ))
+end
+
+
+"""
+    transformers_table(eng::Dict{String, Any})
+
+Generate a table summarizing the transformers in the electrical network described by the dictionary `eng`.
+
+# Arguments
+- `eng::Dict{String, Any}`: A dictionary containing various components of the electrical network.
+
+# Description
+This function extracts the transformers from the `eng` dictionary and creates a DataFrame with the transformer ID, name, source ID, buses, connections, nominal voltage (vm_nom), nominal power (sm_nom), configuration, short-circuit reactance (xsc), winding resistance (rw), no-load loss, magnetizing current (cmag), tap settings (tm_set), fixed taps (tm_fix), polarity, and status. It then prints a formatted table of the transformers.
+
+# Example
+```julia
+using PowerModelsDistribution
+using Pliers 
+eng= PowerModelsDistribution.parse_file("example.dss")
+transformers_table(eng)
+```
+"""
+function transformers_table(eng::Dict{String, Any})
+    transformers = haskey(eng, "transformer") ? eng["transformer"] : error("No transformers found in the engineering data check the data model has \"transformer\" key") 
+    
+    transformers_df = _init_transformers_df()
+                            
+    for (transformer_id, transformer) in transformers
+        _push_transformers_df!(transformers_df, transformer_id, transformer)
+    end
+    header("Transformers Table ($(nrow(transformers_df)) transformers)")
+    pretty_table(sort!(transformers_df))
+    
+    extra_keys(transformers, ["transformer_id", "name", "source_id", "bus", "connections", "vm_nom", "sm_nom", "configuration", "xsc", "rw", "noloadloss", "cmag", "tm_set", "tm_fix", "tm_step", "polarity", "status"])
+end
+
+"""
+    transformers_table(eng::Dict{String,Any}, condition)
+
+Generate and display a filtered table of transformers from the given engineering data.
+
+# Arguments
+- `eng::Dict{String,Any}`: A dictionary containing engineering data, which must include a "transformer" key with transformer information.
+- `condition`: A function that takes a transformer dictionary as input and returns a boolean indicating whether the transformer meets the filtering criteria.
+
+# Description
+This function extracts transformer information from the provided engineering data dictionary, applies the given condition to filter the transformers, and then displays the filtered transformers in a formatted table. Each transformer is augmented with its `transformer_id` before filtering.
+
+# Example
+```julia
+using PowerModelsDistribution
+using Pliers
+eng= PowerModelsDistribution.parse_file("example.dss")
+transformers_table(eng, transformer -> transformer["vm_nom"][1] > 10.0)
+```
+"""
+function transformers_table(eng::Dict{String,Any}, condition::Function)
+    transformers = haskey(eng, "transformer") ? eng["transformer"] : error("No transformers found in the engineering data check the data model has \"transformer\" key") 
+    # adding the transformer_id to the transformer dictionary so it can be filtered by name
+    for (transformer_id, transformer) in transformers
+        transformer["transformer_id"] = transformer_id
+    end
+    
+    transformers_df = _init_transformers_df()
+    matched_transformers_idx = []
+    for (transformer_id, transformer) in transformers
+        if condition(transformer)
+            _push_transformers_df!(transformers_df, transformer_id, transformer)
+            push!(matched_transformers_idx, transformer_id)
+        end
+    end
+    header("Filtered Transformers Table ($(nrow(transformers_df)) transformers)")
+    pretty_table(sort!(transformers_df))
+    extra_keys(transformers, ["transformer_id", "name", "source_id", "bus", "connections", "vm_nom", "sm_nom", "configuration", "xsc", "rw", "noloadloss", "cmag", "tm_set", "tm_fix", "tm_step", "polarity", "status"])
+    return matched_transformers_idx
+end
+
 
 ## 
 
@@ -447,4 +570,5 @@ end
 @define_table_from_file lines_table
 @define_table_from_file loads_table 
 @define_table_from_file linecodes_table
+@define_table_from_file transformers_table
 
