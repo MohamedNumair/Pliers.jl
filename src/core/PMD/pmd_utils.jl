@@ -114,7 +114,7 @@ function solution_dictify_loads!(pf_sol::Dict{String, Any}, math::Dict{String, A
     for (l, load) in pf_sol["load"]
         terminals = math["load"][l]["connections"]
 
-        if !(math["load"][l]["configuration"] == DELTA)
+        if !(string(math["load"][l]["configuration"]) == "DELTA")
             
             # Create current dictionary based on available keys
             if haskey(load, "crd_bus") && haskey(load, "cid_bus")
@@ -165,12 +165,15 @@ function solution_dictify_branches!(pf_sol::Dict{String, Any}, math::Dict{String
         t_terminals = math["branch"][b]["t_connections"]
         # write a dictionary where the key is the terminal number and the value is the current at that terminal
         branch = pf_sol["branch"][b]
-        branch["current_from"] = Dict(string(term) => branch["cr_fr"][i] + branch["ci_fr"][i]*im for (i, term) in enumerate(f_terminals))
-        haskey(branch, "csr_fr") ? branch["shunt_current_from"] = Dict(string(term) => branch["csr_fr"][i] + branch["csi_fr"][i]*im for (i, term) in enumerate(f_terminals)) : nothing
-        branch["current_to"] = Dict(string(term) => branch["cr_to"][i] + branch["ci_to"][i]*im for (i, term) in enumerate(t_terminals))
-        haskey(branch, "csr_to") ? branch["shunt_current_to"] = Dict(string(term) => branch["csr_to"][i] + branch["csi_to"][i]*im for (i, term) in enumerate(t_terminals)) : nothing
         branch["power_from"] = Dict(string(term) => branch["pf"][i] + branch["qf"][i]*im for (i, term) in enumerate(f_terminals))
         branch["power_to"] = Dict(string(term) => branch["pt"][i] + branch["qt"][i]*im for (i, term) in enumerate(t_terminals))
+        #TODO: I can make it check the branch f_bus and t_bus and get their voltages and then calcualte the currents from the powers.
+
+        haskey(branch, "csr_to") ? branch["shunt_current_to"] = Dict(string(term) => branch["csr_to"][i] + branch["csi_to"][i]*im for (i, term) in enumerate(t_terminals)) : nothing
+        haskey(branch, "cr_to") ? branch["current_to"] = Dict(string(term) => branch["cr_to"][i] + branch["ci_to"][i]*im for (i, term) in enumerate(t_terminals)) : nothing
+        haskey(branch, "csr_fr") ? branch["shunt_current_from"] = Dict(string(term) => branch["csr_fr"][i] + branch["csi_fr"][i]*im for (i, term) in enumerate(f_terminals)) : nothing
+        haskey(branch, "cr_fr") ? branch["current_from"] = Dict(string(term) => branch["cr_fr"][i] + branch["ci_fr"][i]*im for (i, term) in enumerate(f_terminals))    : nothing
+    
     end
 end
 
@@ -180,7 +183,7 @@ function solution_dictify_gens!(pf_sol::Dict{String, Any}, math::Dict{String, An
     for (g, gen) in pf_sol["gen"]
         terminals = setdiff(math["gen"][g]["connections"], [4]) 
         # write a dictionary where the key is the terminal number and the value is the current at that terminal
-        gen["current"] = Dict(string(term) => gen["crg"][i] + gen["cig"][i]*im for (i, term) in enumerate(terminals))
+        haskey(gen, "crg") || haskey(gen, "cig") ?  gen["current"] = Dict(string(term) => gen["crg"][i] + gen["cig"][i]*im for (i, term) in enumerate(terminals)) : nothing
         haskey(gen, "pg") || haskey(gen, "pg_bus") ? gen["power"] = Dict(string(term) => gen["pg"][i] + gen["qg"][i]*im for (i, term) in enumerate(terminals)) : nothing
     end
 end
@@ -628,4 +631,76 @@ function move_coords_eng_to_math!(eng, math)
         math["bus"]["$(math["bus_lookup"][b])"]["lon"] = bus["lon"]
     end
 
+end
+
+"""
+    show_transformer_math_components(math; suppress_print::Bool=false)
+
+Extract and display transformer mathematical components from a power system model.
+
+# Arguments
+- `math::Dict`: A dictionary containing the mathematical model representation with 
+  "map" and element type keys (e.g., "bus", "branch", "transformer")
+- `suppress_print::Bool=false`: If `true`, suppresses console output and only returns results
+
+# Returns
+- `Dict{String, Any}`: A nested dictionary organized by transformer name, containing:
+  - `"buses"`: Dictionary of bus elements mapped to this transformer
+  - `"branches"`: Dictionary of branch elements mapped to this transformer
+  - `"transformers"`: Dictionary of transformer elements mapped to this transformer
+
+# Description
+This function identifies all transformers in the mathematical model that were converted 
+from engineering model representation and extracts the associated mathematical components 
+(buses, branches, transformers). Each transformer is identified by the presence of an 
+"unmap_function" equal to "_map_math2eng_transformer!" in the mapping structure.
+
+If `suppress_print=false`, displays formatted console output showing the transformation 
+process and component details.
+
+# Example
+mapped_transformers = show_transformer_math_components(math, suppress_print=false)
+
+"""
+function show_transformer_math_components(math; suppress_print::Bool=false)
+    results = Dict{String, Any}()   
+    transformer_index_byname = findall(x->haskey(x, "unmap_function") && x["unmap_function"] == "_map_math2eng_transformer!", math["map"])
+    for idx in transformer_index_byname
+        trafo_name = math["map"][idx]["from"]
+        
+        if !suppress_print
+            printstyled("👇 BEGIN Transformer ",color=:green)
+            printstyled(trafo_name,color=:green, bold=true)
+            printstyled(" 👇\n",color=:green)        
+            display("in the MATHEMATICAL model transformer " * trafo_name*" was converted to: ")
+        end
+        
+        results[trafo_name] = Dict{String, Any}("buses" => Dict{String, Any}(), "branches" => Dict{String, Any}(), "transformers" => Dict{String, Any}())
+        
+        for element in math["map"][idx]["to"]
+            element_type = split(element, ".")[1]
+            element_idx = split(element, ".")[2]
+            
+            if !suppress_print
+                display("================================" * element_type * " "* element_idx *"================================")
+                # display("Element Index: " * element_idx)    
+                display(math[element_type][element_idx])
+            end
+            
+            if element_type == "bus"
+                results[trafo_name]["buses"][element_idx] = math[element_type][element_idx]
+            elseif element_type == "branch"
+                results[trafo_name]["branches"][element_idx] = math[element_type][element_idx]
+            elseif element_type == "transformer"
+                results[trafo_name]["transformers"][element_idx] = math[element_type][element_idx]
+            end
+        end
+        
+        if !suppress_print
+            printstyled("👆 END Transformer ",color=:red)
+            printstyled(trafo_name,color=:red, bold=true)
+            printstyled(" 👆\n",color=:red)
+        end
+    end
+    return results
 end

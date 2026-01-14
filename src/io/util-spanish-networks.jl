@@ -10,7 +10,7 @@ Remove the Spanish transformer from the given `data_eng` dictionary.
 This function removes the Spanish transformer from the `data_eng` dictionary. It updates the voltage source parameters, deletes the transformer, deletes the lines connected before the transformer, updates the bus settings, and resets the terminals and grounded status of the buses.
 
 """
-function rm_spanish_transformer!(data_eng)
+function rm_spanish_transformer!(data_eng; ref_bus="source")
    
     if haskey(data_eng, "transformer")
         trans = first(data_eng["transformer"]).second
@@ -34,15 +34,15 @@ function rm_spanish_transformer!(data_eng)
         delete!(data_eng["line"], line_bf)
 
         delete!(data_eng["bus"], old_slack)
-        data_eng["settings"]["vbases_default"][new_slack] = data_eng["settings"]["vbases_default"]["source"]*vprim_scale
+        data_eng["settings"]["vbases_default"][new_slack] = data_eng["settings"]["vbases_default"][ref_bus]*vprim_scale
         #delete!(data_eng["settings"]["vbases_default"], "source")
-        delete!(data_eng["settings"]["vbases_default"], "source")
-        delete!(data_eng["bus"], "source")
+        delete!(data_eng["settings"]["vbases_default"], ref_bus)
+        delete!(data_eng["bus"], ref_bus)
 
         for (b, bus) in data_eng["bus"]
             if length(bus["terminals"]) > 4
                 bus["terminals"] = [1, 2, 3, 4]
-                bus["grounded"] = Int64[]
+                #bus["grounded"] = Int64[]
             end
         end
 
