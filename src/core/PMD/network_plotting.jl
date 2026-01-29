@@ -1047,17 +1047,17 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
                             error("Unexpected connections: $(edge[:t_connections])")
                         end
                     elseif length(edge[:t_connections]) == 2
-                        if edge[:t_connections] == [1, 4]
+                        if edge[:t_connections] == [1, 4] || edge[:t_connections] == [4, 1]
                             edge[:edge_color] = :red
-                        elseif edge[:t_connections] == [2, 4]
+                        elseif edge[:t_connections] == [2, 4] || edge[:t_connections] == [4, 2]
                             edge[:edge_color] = :green
-                        elseif edge[:t_connections] == [3, 4]
+                        elseif edge[:t_connections] == [3, 4] || edge[:t_connections] == [4, 3]
                             edge[:edge_color] = :blue
-                        elseif edge[:t_connections] == [1, 2]
+                        elseif edge[:t_connections] == [1, 2] || edge[:t_connections] == [2, 1]
                             edge[:edge_color] = :blue
-                        elseif edge[:t_connections] == [2, 3]
+                        elseif edge[:t_connections] == [2, 3] || edge[:t_connections] == [3, 2]
                             edge[:edge_color] = :blue
-                        elseif edge[:t_connections] == [3, 1]
+                        elseif edge[:t_connections] == [3, 1] || edge[:t_connections] == [1, 3]
                             edge[:edge_color] = :blue
                         else
                             error("Unexpected connections: $(edge[:t_connections])")
