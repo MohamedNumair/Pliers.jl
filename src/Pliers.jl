@@ -6,9 +6,10 @@ in conjunction with PowerModelsDistribution.jl and PowerModelsDistributionStateE
 for simplified reporting, analysis, and visualization.
 
 # Sub-modules
-- [`PMDUtils`](@ref): Utility functions for PowerModelsDistribution workflows
-- [`PMDSEUtils`](@ref): Utility functions for PowerModelsDistributionStateEstimation workflows  
-- [`PMDPlotting`](@ref): Plotting functions for network visualization
+The package provides optional sub-module access for organized imports:
+- `PMDUtils`: Re-exports PMD-related utility functions
+- `PMDSEUtils`: Re-exports PMDSE-related utility functions  
+- `PMDPlotting`: Re-exports plotting functions
 
 # Author
 Mohamed Numair (mnumair.com)
@@ -92,7 +93,7 @@ const _STAT = Statistics
 
 Print information about the package author.
 """
-author() = println("This package was developped by Mohamed Numair (mnumair.com)")
+author() = println("This package was developed by Mohamed Numair (mnumair.com)")
 
 
 # included functionalities

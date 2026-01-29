@@ -11,25 +11,25 @@ Pliers.jl is a collection of tools that I usually need (like pliers for an elect
 - **State Estimation Tools**: Visualize residuals and analyze measurement data
 - **Result Processing**: Transform and analyze power flow results
 
-## Sub-modules
+## Package Organization
 
-Pliers.jl is organized into three sub-modules for better maintainability:
+Pliers.jl provides all functionality through the main module. For organizational purposes, functions are also re-exported through sub-modules that group related functionality:
 
 ### PMDUtils
-Utility functions for PowerModelsDistribution workflows including:
+Re-exports utility functions for PowerModelsDistribution workflows including:
 - Solution processing (voltage fluffing, dictification)
 - Impedance calculations (Kron reduction, sequence components)
 - Network data manipulation
 - Engineering and mathematical model exploration
 
 ### PMDSEUtils
-Utility functions for PowerModelsDistributionStateEstimation workflows including:
+Re-exports utility functions for PowerModelsDistributionStateEstimation workflows including:
 - State estimation result visualization
 - Measurement residual analysis
 - Measurement data processing and writing
 
 ### PMDPlotting
-Plotting functions for network visualization including:
+Re-exports plotting functions for network visualization including:
 - Network tree visualization
 - Coordinate-based network plotting
 - Geographic map overlays

@@ -1,6 +1,8 @@
 # API Reference
 
-This page lists all exported functions and types from Pliers.jl and its sub-modules.
+This page lists all exported functions and types from Pliers.jl. 
+
+All functions are available directly from the main `Pliers` module. For convenience, related functions are also re-exported through sub-modules that group them by domain.
 
 ## Main Module
 
@@ -8,25 +10,25 @@ This page lists all exported functions and types from Pliers.jl and its sub-modu
 Modules = [Pliers]
 ```
 
-## PMDUtils Module
+## PMDUtils Sub-module
 
-Functions for PowerModelsDistribution workflows.
+Re-exports PMD-related utility functions. These functions are also available directly from the main Pliers module.
 
 ```@autodocs
 Modules = [Pliers.PMDUtils]
 ```
 
-## PMDSEUtils Module
+## PMDSEUtils Sub-module
 
-Functions for PowerModelsDistributionStateEstimation workflows.
+Re-exports PMDSE-related utility functions. These functions are also available directly from the main Pliers module.
 
 ```@autodocs
 Modules = [Pliers.PMDSEUtils]
 ```
 
-## PMDPlotting Module
+## PMDPlotting Sub-module
 
-Network visualization and plotting functions.
+Re-exports network visualization and plotting functions. These functions are also available directly from the main Pliers module.
 
 ```@autodocs
 Modules = [Pliers.PMDPlotting]
