@@ -1,3 +1,19 @@
+"""
+    Pliers
+
+A Julia package providing tools for analyzing power distribution systems. Designed to be used
+in conjunction with PowerModelsDistribution.jl and PowerModelsDistributionStateEstimation.jl
+for simplified reporting, analysis, and visualization.
+
+# Sub-modules
+The package provides optional sub-module access for organized imports:
+- `PMDUtils`: Re-exports PMD-related utility functions
+- `PMDSEUtils`: Re-exports PMDSE-related utility functions  
+- `PMDPlotting`: Re-exports plotting functions
+
+# Author
+Mohamed Numair (mnumair.com)
+"""
 module Pliers
 
 # data structure
@@ -72,7 +88,12 @@ const _STAT = Statistics
 # const _PMD = PowerModelsDistribution
 # const _PMDSE = PowerModelsDistributionStateEstimation
 
-author() = println("This package was developped by Mohamed Numair (mnumair.com)")
+"""
+    author()
+
+Print information about the package author.
+"""
+author() = println("This package was developed by Mohamed Numair (mnumair.com)")
 
 
 # included functionalities
@@ -101,5 +122,9 @@ include("core/PMD/network_plotting.jl")
 #PMDSE
 include("core/PMDSE/pmdse_utils.jl")
 
+# Sub-modules for organized namespace
+include("modules/PMDUtils.jl")
+include("modules/PMDSEUtils.jl")
+include("modules/PMDPlotting.jl")
 
 end # module Pliers

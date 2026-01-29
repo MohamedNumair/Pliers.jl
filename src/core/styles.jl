@@ -1,21 +1,84 @@
 # Printing Styles
 
+"""
+    header(text::String)
 
+Print a header text with bold, underlined blue formatting.
+
+# Arguments
+- `text::String`: The text to display as a header.
+
+# Examples
+```julia
+header("Section Title")
+```
+"""
 function header(text::String)
     print(BOLD(UNDERLINE(BLUE_FG("$text\n"))))
 end
 
+"""
+    sub_header(text::String)
+
+Print a sub-header text with bold, italic blue formatting.
+
+# Arguments
+- `text::String`: The text to display as a sub-header.
+
+# Examples
+```julia
+sub_header("Sub-section Title")
+```
+"""
 function sub_header(text::String)
     print(BOLD(ITALICS(BLUE_FG("$text\n"))))
 end
 
+"""
+    sub_sub_header(text::String)
+
+Print a sub-sub-header text with bold magenta formatting.
+
+# Arguments
+- `text::String`: The text to display as a sub-sub-header.
+
+# Examples
+```julia
+sub_sub_header("Minor Section Title")
+```
+"""
 sub_sub_header(text::String) = print(BOLD(MAGENTA_FG("$text\n")))
 
+"""
+    warning_text(message::String)
 
+Print a warning message with italic yellow formatting.
+
+# Arguments
+- `message::String`: The warning message to display.
+
+# Examples
+```julia
+warning_text("This is a warning")
+```
+"""
 function warning_text(message::String)
     print(ITALICS(YELLOW_FG("Warning: $message\n")))
 end
 
+"""
+    error_text(message::String)
+
+Print an error message with italic red formatting.
+
+# Arguments
+- `message::String`: The error message to display.
+
+# Examples
+```julia
+error_text("This is an error")
+```
+"""
 function error_text(message::String)
     print(ITALICS(RED_FG("Error: $message\n")))
 end
@@ -63,6 +126,37 @@ $$/      $$/  $$$$$$$/ $$/   $$/ $$/  $$$$$$$/
 
 # Makie Themes
 
+"""
+    set_journal_theme(; fontsize=nothing)
+
+Set a Makie theme suitable for journal publications (IEEE style).
+
+This function configures a Makie theme with appropriate fonts, colors, and styling
+for publication-quality figures. The theme uses TeX Gyre Termes fonts when available,
+falling back to Computer Modern if not found.
+
+# Keyword Arguments
+- `fontsize`: Optional font size override. Defaults to 8pt if not specified.
+
+# Returns
+A tuple containing unit conversion factors:
+- `inch::Float64`: Pixels per inch (96)
+- `pt::Float64`: Pixels per point (4/3)
+- `cm::Float64`: Pixels per centimeter
+- `ieeecolumn::Float64`: Width of a single IEEE column in pixels (3.5 inches)
+- `ieee2column::Float64`: Width of a double IEEE column in pixels (7.16 inches)
+
+# Examples
+```julia
+inch, pt, cm, ieeecolumn, ieee2column = set_journal_theme()
+fig = Figure(size=(ieeecolumn, ieeecolumn))
+```
+
+# Notes
+IEEE Figure Sizes:
+- One column width: 3.5 inches, 88.9 mm, or 21 picas
+- Two columns width: 7.16 inches, 182 mm, or 43 picas
+"""
 function set_journal_theme(; fontsize = nothing,      )
 
     inch = 96
