@@ -1,15 +1,14 @@
-
 using Pliers
 using Documenter
 using DocumenterVitepress
 
-#DocMeta.setdocmeta!(Example, :DocTestSetup, :(using Example); recursive=true)  
+#DocMeta.setdocmeta!(Pliers, :DocTestSetup, :(using Pliers); recursive=true)  
 
 makedocs(;
-    modules = [Pliers],
+    modules = [Pliers, Pliers.PMDUtils, Pliers.PMDSEUtils, Pliers.PMDPlotting],
     repo = "https://github.com/MohamedNumair/Pliers.jl",
     authors = "Mohamed Numair <Mo7amednumair@gmail.com>",
-    #sitename = "Example.jl",
+    sitename = "Pliers.jl",
     format = DocumenterVitepress.MarkdownVitepress(
         repo = "https://github.com/MohamedNumair/Pliers.jl",
         md_output_path = ".",    # comment when deploying
@@ -17,9 +16,7 @@ makedocs(;
     ),
     pages = [
         "Home" => "index.md",
-        #"Tutorials" => "tutorials.md",
         "API" => "api.md",
-        #"Contributing" => "contributing.md"
     ],
     clean = false,
 )

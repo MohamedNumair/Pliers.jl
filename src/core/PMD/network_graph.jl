@@ -1,9 +1,50 @@
+"""
+    create_network_graph(data::Dict{String,Any}, fallback_layout)
+
+Create a MetaDiGraph representation of a power distribution network.
+
+Automatically detects whether the input data is in ENGINEERING or MATHEMATICAL format
+and calls the appropriate graph creation function.
+
+# Arguments
+- `data::Dict{String,Any}`: Network data dictionary (either ENGINEERING or MATHEMATICAL model).
+- `fallback_layout`: Layout function to use if no coordinates are available.
+
+# Returns
+The result of either `create_network_graph_eng` or `create_network_graph_math` depending
+on the data model type.
+
+# See also
+- [`create_network_graph_eng`](@ref)
+- [`create_network_graph_math`](@ref)
+"""
 function create_network_graph(data::Dict{String,Any}, fallback_layout)
     _is_eng(data) ? create_network_graph_eng(data, fallback_layout) : create_network_graph_math(data, fallback_layout)
 end
 
 """
     create_network_graph_eng(eng::Dict{String,Any}, fallback_layout) -> MetaDiGraph, Function, Dict{Symbol,Any}
+
+Create a MetaDiGraph from an ENGINEERING model network.
+
+Constructs a directed graph where vertices represent buses and edges represent
+lines and transformers. Bus properties are enriched with connected loads, shunts,
+and voltage sources.
+
+# Arguments
+- `eng::Dict{String,Any}`: Network data in ENGINEERING format.
+- `fallback_layout`: Layout function to use if bus coordinates are not available.
+
+# Returns
+A tuple containing:
+- `network_graph::MetaDiGraph`: The constructed network graph.
+- `GraphLayout::Function`: Layout function for plotting (coordinate-based or fallback).
+- `eng_sym::Dict{Symbol,Any}`: Copy of input data with keys converted to symbols.
+
+# Examples
+```julia
+network_graph, layout, eng_sym = create_network_graph_eng(eng, GraphMakie.Buchheim())
+```
 """
 function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     eng_sym = convert_keys_to_symbols(deepcopy(eng))
@@ -128,6 +169,26 @@ end
 
 """
     create_network_graph_math(math::Dict{String,Any}, fallback_layout) -> MetaDiGraph, Function, Dict{Symbol,Any}
+
+Create a MetaDiGraph from a MATHEMATICAL model network.
+
+Constructs a directed graph where vertices represent buses and edges represent
+branches. Bus properties are enriched with connected loads, shunts, and generators.
+
+# Arguments
+- `math::Dict{String,Any}`: Network data in MATHEMATICAL format.
+- `fallback_layout`: Layout function to use if bus coordinates are not available.
+
+# Returns
+A tuple containing:
+- `network_graph::MetaDiGraph`: The constructed network graph.
+- `GraphLayout::Function`: Layout function for plotting (coordinate-based or fallback).
+- `math_sym::Dict{Symbol,Any}`: Copy of input data with keys converted to symbols.
+
+# Examples
+```julia
+network_graph, layout, math_sym = create_network_graph_math(math, GraphMakie.Buchheim())
+```
 """
 function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     math_sym = convert_keys_to_symbols(deepcopy(math))
@@ -279,7 +340,27 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     return network_graph, GraphLayout, math_sym
 end
 
+"""
+    get_graph_node(G, node)
+    get_graph_node(G, node, key)
 
+Get properties of a node (bus) from the network graph.
+
+# Arguments
+- `G::MetaDiGraph`: The network graph.
+- `node`: Node identifier (bus ID).
+- `key`: (Optional) Specific property key to retrieve.
+
+# Returns
+- Without `key`: Dictionary of all node properties.
+- With `key`: Value of the specified property.
+
+# Examples
+```julia
+props = get_graph_node(G, "bus1")
+voltage = get_graph_node(G, "bus1", "vm")
+```
+"""
 function get_graph_node(G, node)
     Gidx = G[Symbol(node), :bus_id]
     return props(G, Gidx)
@@ -291,6 +372,27 @@ function get_graph_node(G, node, key)
     return props(G, Gidx)[Symbol(key)]
 end
 
+"""
+    get_graph_edge(G, edge_id)
+    get_graph_edge(G, edge_id, key)
+
+Get properties of an edge (line/branch) from the network graph.
+
+# Arguments
+- `G::MetaDiGraph`: The network graph.
+- `edge_id`: Edge identifier (line ID for ENGINEERING, branch ID for MATHEMATICAL).
+- `key`: (Optional) Specific property key to retrieve.
+
+# Returns
+- Without `key`: Dictionary of all edge properties.
+- With `key`: Value of the specified property.
+
+# Examples
+```julia
+props = get_graph_edge(G, "line1")
+impedance = get_graph_edge(G, "line1", "rs")
+```
+"""
 function get_graph_edge(G, edge_id)
     if _is_eng(G)
         Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)
