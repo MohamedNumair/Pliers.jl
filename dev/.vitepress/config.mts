@@ -2,78 +2,18 @@ import { defineConfig } from 'vitepress'
 import { tabsMarkdownPlugin } from 'vitepress-plugin-tabs'
 import mathjax3 from "markdown-it-mathjax3";
 import footnote from "markdown-it-footnote";
-import path from 'path'
-
-function getBaseRepository(base: string): string {
-  if (!base || base === '/') return '/';
-  const parts = base.split('/').filter(Boolean);
-  return parts.length > 0 ? `/${parts[0]}/` : '/';
-}
-
-const baseTemp = {
-  base: '/Pliers.jl/dev/',// TODO: replace this in makedocs!
-}
-
-const navTemp = {
-  nav: [
-{ text: 'Home', link: '/index' },
-{ text: 'Tutorials', collapsed: false, items: [
-]
- },
-{ text: 'API Reference', link: '/api' },
-{ text: 'Development', collapsed: false, items: [
-{ text: 'To-Do List', link: '/TODO' }]
- }
-]
-,
-}
-
-const nav = [
-  ...navTemp.nav,
-  {
-    component: 'VersionPicker'
-  }
-]
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  base: '/Pliers.jl/dev/',// TODO: replace this in makedocs!
-  title: 'Pliers.jl',
+  base: '/Pliers.jl/',// TODO: replace this in makedocs!
+  title: '',
   description: 'Documentation for Pliers.jl',
   lastUpdated: true,
   cleanUrls: true,
-  outDir: '../1', // This is required for MarkdownVitepress to work correctly...
-  head: [
-    
-    ['script', {src: `${getBaseRepository(baseTemp.base)}versions.js`}],
-    // ['script', {src: '/versions.js'], for custom domains, I guess if deploy_url is available.
-    ['script', {src: `${baseTemp.base}siteinfo.js`}]
-  ],
+  outDir: '../final_site', // This is required for MarkdownVitepress to work correctly...
   
-  vite: {
-    define: {
-      __DEPLOY_ABSPATH__: JSON.stringify('/Pliers.jl'),
-    },
-    resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '../components')
-      }
-    },
-    optimizeDeps: {
-      exclude: [ 
-        '@nolebase/vitepress-plugin-enhanced-readabilities/client',
-        'vitepress',
-        '@nolebase/ui',
-      ], 
-    }, 
-    ssr: { 
-      noExternal: [ 
-        // If there are other packages that need to be processed by Vite, you can add them here.
-        '@nolebase/vitepress-plugin-enhanced-readabilities',
-        '@nolebase/ui',
-      ], 
-    },
-  },
+  ignoreDeadLinks: true,
+
   markdown: {
     math: true,
     config(md) {
@@ -94,16 +34,14 @@ export default defineConfig({
         detailedView: true
       }
     },
-    nav,
+    nav: [
+{ text: 'Home', link: '/index' },
+{ text: 'API', link: '/api' }
+]
+,
     sidebar: [
 { text: 'Home', link: '/index' },
-{ text: 'Tutorials', collapsed: false, items: [
-]
- },
-{ text: 'API Reference', link: '/api' },
-{ text: 'Development', collapsed: false, items: [
-{ text: 'To-Do List', link: '/TODO' }]
- }
+{ text: 'API', link: '/api' }
 ]
 ,
     editLink: { pattern: "https://https://github.com/MohamedNumair/Pliers.jl/edit/main/docs/src/:path" },
