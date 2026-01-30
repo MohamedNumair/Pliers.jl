@@ -32,6 +32,8 @@ function eng_report(eng::Dict{String, Any}; detailed = false)
     print("             $(BOLD("$(length(get(eng, "transformer", [])))")) transformers, \n")
     print("             $(BOLD("$(length(get(eng, "time_series", [])))")) time series data points.\n")
 
+    _eng_summary_table(eng)
+
 if detailed == true
     buses_table(eng)
     lines_table(eng)
@@ -41,6 +43,131 @@ if detailed == true
     end
 end
 
+end
+
+function _eng_summary_table(eng::Dict{String, Any})
+    n_nodes = length(get(eng, "bus", Dict()))
+    n_lines = length(get(eng, "line", Dict()))
+    n_loads = length(get(eng, "load", Dict()))
+    n_tfs = length(get(eng, "transformer", Dict()))
+    
+    tot_len = 0.0
+    tot_r = 0.0
+    tot_x = 0.0
+    max_amps = 0.0
+    
+    lines = get(eng, "line", Dict())
+    linecodes = get(eng, "linecode", Dict())
+    
+    for (_, line) in lines
+        l_len = get(line, "length", 0.0)
+        tot_len += l_len
+        
+        rating = get(line, "normamps", get(line, "rate_a", 0.0))
+        if isa(rating, AbstractArray) && !isempty(rating)
+            rating = maximum(rating)
+        elseif isa(rating, Number)
+             # ok
+        else
+            rating = 0.0
+        end
+        if rating > max_amps
+            max_amps = rating
+        end
+
+        r_line = 0.0
+        x_line = 0.0
+        
+        # Resistance
+        if haskey(line, "Rs (Ω)")
+            val = line["Rs (Ω)"]
+            r_line = isa(val, AbstractArray) ? val[1] : val
+        elseif haskey(line, "rs") && !haskey(line, "linecode")
+             val = line["rs"]
+             r_val = isa(val, AbstractArray) ? val[1] : val
+             r_line = r_val * l_len
+        elseif haskey(line, "linecode")
+             lc_id = line["linecode"]
+             if haskey(linecodes, lc_id)
+                 lc = linecodes[lc_id]
+                 rs = get(lc, "rs", 0.0)
+                 r_val = isa(rs, AbstractArray) ? rs[1] : rs
+                 r_line = r_val * l_len
+             end
+        end
+        tot_r += r_line
+        
+        # Reactance
+        if haskey(line, "Xs (Ω)")
+            val = line["Xs (Ω)"]
+            x_line = isa(val, AbstractArray) ? val[1] : val
+        elseif haskey(line, "xs") && !haskey(line, "linecode")
+             val = line["xs"]
+             x_val = isa(val, AbstractArray) ? val[1] : val
+             x_line = x_val * l_len
+        elseif haskey(line, "linecode")
+             lc_id = line["linecode"]
+             if haskey(linecodes, lc_id)
+                 lc = linecodes[lc_id]
+                 xs = get(lc, "xs", 0.0)
+                 x_val = isa(xs, AbstractArray) ? xs[1] : xs
+                 x_line = x_val * l_len
+             end
+        end
+        tot_x += x_line
+    end
+    
+    tot_mva = 0.0
+    for (_, tf) in get(eng, "transformer", Dict())
+        sm = get(tf, "sm_nom", 0.0)
+        val = isa(sm, AbstractArray) && !isempty(sm) ? maximum(sm) : (isa(sm, Number) ? sm : 0.0)
+        tot_mva += val
+    end
+    tot_mva_val = tot_mva / 1000.0
+
+    lats = [b["lat"] for (k,b) in get(eng, "bus", Dict()) if haskey(b, "lat")]
+    lons = [b["lon"] for (k,b) in get(eng, "bus", Dict()) if haskey(b, "lon")]
+    area = 0.0
+    gis_info = "No"
+    if !isempty(lats)
+        gis_info = "Yes"
+        min_lat, max_lat = minimum(lats), maximum(lats)
+        min_lon, max_lon = minimum(lons), maximum(lons)
+        lat_dist = (max_lat - min_lat) * 111.0
+        avg_lat = mean(lats)
+        lon_dist = (max_lon - min_lon) * 111.0 * cos(deg2rad(avg_lat))
+        area = lat_dist * lon_dist
+    end
+
+    rx = (tot_x != 0) ? tot_r/tot_x : 0.0
+    z_tot = sqrt(tot_r^2 + tot_x^2)
+    len_load = (n_loads > 0) ? tot_len / n_loads : 0.0
+    z_cons = (n_loads > 0) ? z_tot / n_loads : 0.0
+    n_linecodes = length(linecodes)
+
+    data = [
+        "Number of nodes"           n_nodes;
+        "Number of branches"        n_lines;
+        "Number of loads"           n_loads;
+        "Number Transformers"       n_tfs;
+        "Total resistance"          round(tot_r, digits=4);
+        "Total reactance"           round(tot_x, digits=4);
+        "Total MVA of transformers" round(tot_mva_val, digits=4);
+        "Total length of lines (m)" round(tot_len, digits=4);
+        #"Area (sq km)"              round(area, digits=4);
+        "Number of line types used" n_linecodes;
+        "Total impedance"           round(z_tot, digits=4);
+        "R/X ratio"                 round(rx, digits=4);
+        "Length/load"               round(len_load, digits=4);
+        "Z/ consumer"               round(z_cons, digits=4);
+        #"GIS information"           gis_info;
+        #"Max current capacity"      round(max_amps, digits=4);
+    ]
+    #display(data)
+    println("\"Feeder name\", \"Number of nodes\", \"Number of branches\", \"Number of loads\", \"Number Transformers\", \"Total resistance\", \"Total reactance\", \"Total MVA of transformers\", \"Total length of lines (m)\", \"Number of line types used\", \"Total impedance\", \"R/X ratio\", \"Length/load\", \"Z/ consumer\"")
+    println("$(eng["name"]),$(n_nodes), $(n_lines), $(n_loads), $(n_tfs), $(round(tot_r, digits=4)), $(round(tot_x, digits=4)), $(round(tot_mva_val, digits=4)), $(round(tot_len, digits=4)), $(n_linecodes), $(round(z_tot, digits=4)), $(round(rx, digits=4)), $(round(len_load, digits=4)), $(round(z_cons, digits=4))")
+    #return data
+    #pretty_table(data; header=["Attributes", "Values"], alignment=[:l, :r])
 end
 
 

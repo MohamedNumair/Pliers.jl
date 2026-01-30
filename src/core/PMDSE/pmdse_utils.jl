@@ -484,3 +484,35 @@ function _calculate_MAPE_toNeutral(SE_RES, PF_RES, math)
     return mean_APE, APEs_df, Errors_df
 
 end
+
+"""
+    generate_meas_est_table(se_results, math)
+
+Generates a DataFrame comparing measured values against estimated values from state estimation results.
+
+# Arguments
+- `se_results`: A dictionary containing the results of the state estimation, specifically looking for the `"solution"` key to access estimated variables.
+- `math`: A dictionary containing the mathematical model and measurement data, specifically looking for the `"meas"` key which iterates over measurement definitions.
+
+# Returns
+- `DataFrame`: A DataFrame with the following columns:
+    - `MeasID`: The unique identifier for the measurement.
+    - `CompID`: The component identifier, concatenated as "component_type.component_id".
+    - `Variable`: The specific variable being measured (e.g., voltage, power).
+    - `MeasValue`: The mean value of the measurement distribution.
+    - `EstValue`: The estimated value from the state estimation solution corresponding to the specific component and variable.
+
+# Example
+    df_results = generate_meas_est_table(se_results, math)
+
+"""
+
+function generate_meas_est_table(se_results, math)
+    df_meas_est = DataFrame(MeasID=String[], CompID=String[], Variable=String[], MeasValue=Vector{Float64}[], EstValue=Vector{Float64}[])
+
+    for (meas_id, meas) in sort(math["meas"])
+        push!(df_meas_est, (MeasID=meas_id, CompID=string(meas["cmp"]) * "." * string(meas["cmp_id"]), Variable=string(meas["var"]), MeasValue=mean.(meas["dst"]), EstValue=se_results["solution"][string(meas["cmp"])][string(meas["cmp_id"])][string(meas["var"])]))
+    end
+
+    return df_meas_est
+end
