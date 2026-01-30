@@ -76,7 +76,7 @@ makedocs(;
 )
 
 deploydocs(;
-    repo = "https://github.com/MohamedNumair/Pliers.jl",
+    repo = "github.com/MohamedNumair/Pliers.jl",
     target = "build",
     devbranch = "main",
     branch = "gh-pages",
