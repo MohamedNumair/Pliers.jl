@@ -1,6 +1,5 @@
 using Pliers
 using Documenter
-using DocumenterVitepress
 using Literate
 using Pkg
 
@@ -61,14 +60,14 @@ pages = [
 
 makedocs(;
     modules = [Pliers, Pliers.PMDUtils, Pliers.PMDSEUtils, Pliers.PMDPlotting],
-    repo = "https://github.com/MohamedNumair/Pliers.jl",
     authors = AUTHORS,
     sitename = "$NAME.jl",
     version = PROJECT_VERSION,
-    format = DocumenterVitepress.MarkdownVitepress(
-        repo = "https://github.com/MohamedNumair/Pliers.jl",
-        md_output_path = ".",    # comment when deploying
-        build_vitepress = false, # comment when deploying
+    format = Documenter.HTML(
+        prettyurls = get(ENV, "CI", "false") == "true",
+        canonical = "https://MohamedNumair.github.io/Pliers.jl",
+        edit_link = "main",
+        assets = String[],
     ),
     pages = pages,
     clean = false,
