@@ -122,9 +122,9 @@ include("core/PMD/network_plotting.jl")
 #PMDSE
 include("core/PMDSE/pmdse_utils.jl")
 
-# Sub-modules for organized namespace
-include("modules/PMDUtils.jl")
-include("modules/PMDSEUtils.jl")
-include("modules/PMDPlotting.jl")
+# # Sub-modules for organized namespace
+# include("modules/PMDUtils.jl")
+# include("modules/PMDSEUtils.jl")
+# include("modules/PMDPlotting.jl")
 
 end # module Pliers
