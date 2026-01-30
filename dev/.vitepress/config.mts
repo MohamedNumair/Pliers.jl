@@ -17,7 +17,13 @@ const baseTemp = {
 const navTemp = {
   nav: [
 { text: 'Home', link: '/index' },
-{ text: 'API', link: '/api' }
+{ text: 'Tutorials', collapsed: false, items: [
+]
+ },
+{ text: 'API Reference', link: '/api' },
+{ text: 'Development', collapsed: false, items: [
+{ text: 'To-Do List', link: '/TODO' }]
+ }
 ]
 ,
 }
@@ -91,7 +97,13 @@ export default defineConfig({
     nav,
     sidebar: [
 { text: 'Home', link: '/index' },
-{ text: 'API', link: '/api' }
+{ text: 'Tutorials', collapsed: false, items: [
+]
+ },
+{ text: 'API Reference', link: '/api' },
+{ text: 'Development', collapsed: false, items: [
+{ text: 'To-Do List', link: '/TODO' }]
+ }
 ]
 ,
     editLink: { pattern: "https://https://github.com/MohamedNumair/Pliers.jl/edit/main/docs/src/:path" },
