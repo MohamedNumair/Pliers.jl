@@ -18,6 +18,41 @@ using ..Pliers
 
 
 
+# pretty terminal packages
+using Crayons
+using Crayons.Box
+using PrettyTables
+
+# plotting packages
+using Makie
+# using MakieCore
+using CairoMakie
+using WGLMakie
+if Sys.iswindows()
+    # using GLMakie
+end
+
+# using Tyler
+# using Tyler.TileProviders
+# using Tyler.MapTiles
+# using Tyler.Extents
+
+# data analysis packages
+using Statistics
+using LinearAlgebra
+
+# using Dates
+# using StatsPlots
+# using StatsBase
+# using Distributions
+# using Random  
+
+# Power Distribution Tools
+#using PowerModelsDistribution
+#using PowerModelsDistributionStateEstimation
+#using Ipopt
+
+
 #=
 ░██████████ ░███    ░██   ░██████     ░█████████  ░██████████ ░█████████    ░██████   ░█████████  ░██████████
 ░██         ░████   ░██  ░██   ░██    ░██     ░██ ░██         ░██     ░██  ░██   ░██  ░██     ░██     ░██    
@@ -2112,15 +2147,6 @@ function _is_eng(data::Dict{String, Any})
     end
 end
 
-function _is_eng(graph::MetaDiGraph)
-
-    if haskey(first(graph.eprops).second, :branch_id)
-        return false
-    else
-        return true
-    end
-    error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
-end
 
 
 

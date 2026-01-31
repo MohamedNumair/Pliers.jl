@@ -33,4 +33,3 @@ function extract_ntw_fdr_jld(file_path::String; pattern = r"(?i)\\Ntw_(\d+)_Fdr_
 end
 
 
-transBritishto4326 = Proj.Transformation("EPSG:27700", "EPSG:4326", always_xy=true) # British National Grid OSGB36 to WGS84

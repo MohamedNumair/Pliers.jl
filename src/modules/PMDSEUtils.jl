@@ -16,7 +16,15 @@ using ..Pliers
 
 
 
+# pretty terminal packages
+using Crayons
+using Crayons.Box
+using PrettyTables
 
+
+# data analysis packages
+using Statistics
+using LinearAlgebra
 
 
 

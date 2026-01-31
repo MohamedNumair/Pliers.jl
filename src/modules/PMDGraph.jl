@@ -14,8 +14,11 @@ See the main Pliers module for function documentation.
 module PMDGraph
 
 using ..Pliers
-
-
+using GraphMakie
+using GeoMakie
+using Proj
+using Graphs
+using MetaGraphs
 
 
 
@@ -377,6 +380,54 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     return network_graph, GraphLayout, math_sym
 end
 
+
+# fix MetaGraphs set_indexing_prop! function
+
+
+"""
+    set_indexing_prop!(g, prop)
+    set_indexing_prop!(g, v, prop, val)
+
+Make property `prop` into an indexing property. If any values for this property
+are already set, each vertex must have unique values. Optionally, set the index
+`val` for vertex `v`. Any vertices without values will be set to a default
+("(prop)(v)").
+"""
+function set_indexing_prop!(g::AbstractMetaGraph, prop::Symbol; exclude=nothing)
+    in(prop, g.indices) && return g.indices
+    index_values = [g.vprops[v][prop] for v in keys(g.vprops) if haskey(g.vprops[v], prop)]
+    length(index_values) != length(union(index_values)) && error("Cannot make $prop an index, duplicate values detected")
+    index_values = Set(index_values)
+
+    g.metaindex[prop] = Dict{Any,Integer}()
+    for v in vertices(g)
+        if !haskey(g.vprops, v) || !haskey(g.vprops[v], prop)
+            val = default_index_value(v, prop, index_values, exclude=exclude)
+            set_prop!(g, v, prop, val)
+        end
+        g.metaindex[prop][g.vprops[v][prop]] = v
+    end
+    push!(g.indices, prop)
+    return g.indices
+end
+
+
+"""
+    default_index_value(v, prop, index_values; exclude=nothing)
+
+Provides a default index value for a vertex if no value currently exists. The default is a string: "\$prop\$i" where `prop` is the property name and `i` is the vertex number. If some other vertex already has this name, a randomized string is generated (though the way it is generated is deterministic).
+"""
+function default_index_value(v::Integer, prop::Symbol, index_values::Set{}; exclude=nothing)
+    val = string(prop) * string(v)
+    if in(val, index_values) || val == exclude
+        seed!(v + hash(prop))
+        val = randstring()
+        @warn("'$(string(prop))$v' is already in index, setting ':$prop' for vertex $v to $val")
+    end
+    return val
+end
+
+
 """
     get_graph_node(G, node)
     get_graph_node(G, node, key)
@@ -449,6 +500,15 @@ end
 
 # edge_color = [get_graph_edge(G, edge)[:linecodes][:rs] for edge in edges(G)]
 
+function _is_eng(graph::MetaDiGraph)
+
+    if haskey(first(graph.eprops).second, :branch_id)
+        return false
+    else
+        return true
+    end
+    error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
+end
 
 #=
 ░███    ░██ ░██████████ ░██████████░██       ░██   ░██████   ░█████████  ░██     ░██    ░█████████  ░██           ░██████   ░██████████
@@ -494,6 +554,13 @@ $$/       $$/  $$$$$$/     $$$$/        $$/      $$$$$$/  $$/   $$/  $$$$$$$/   
 
 
 =#
+
+
+# Coord Transform
+
+transSpanishTo4326 = Proj.Transformation("EPSG:3042", "EPSG:4326", always_xy=true) # ETRS89 / UTM zone 30N to WGS84
+#transSpanishTo4326 = Proj.Transformation("EPSG:25830", "EPSG:4326", always_xy=true) # ETRS89 / UTM zone 30N to WGS84
+transBritishto4326 = Proj.Transformation("EPSG:27700", "EPSG:4326", always_xy=true) # British National Grid OSGB36 to WGS84
 
 
 

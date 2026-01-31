@@ -22,6 +22,7 @@ using CSV
 using FileIO
 using Serialization
 using Suppressor
+
 # pretty terminal packages
 using Crayons
 using Crayons.Box
@@ -35,29 +36,11 @@ using WGLMakie
 if Sys.iswindows()
     # using GLMakie
 end
-using GraphMakie
-using GeoMakie
-using Proj
-# using Tyler
-# using Tyler.TileProviders
-# using Tyler.MapTiles
-# using Tyler.Extents
 
 # data analysis packages
 using Statistics
 using LinearAlgebra
-using Graphs
-using MetaGraphs
-# using Dates
-# using StatsPlots
-# using StatsBase
-# using Distributions
-# using Random  
 
-# Power Distribution Tools
-#using PowerModelsDistribution
-#using PowerModelsDistributionStateEstimation
-#using Ipopt
 
 # pkg const
 const pkg_name = "Pliers"
@@ -72,6 +55,7 @@ const _CSV = CSV
 # pretty terminal packages
 const _CRN = Crayons
 const _PT = PrettyTables
+
 
 # plotting packages
 const _MK = Makie

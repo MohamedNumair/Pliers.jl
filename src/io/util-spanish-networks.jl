@@ -1050,11 +1050,6 @@ function write_dss_file(spanish_data::Dict, feeder_no::Int)
 end 
 
 
-# Coord Transform
-
-transSpanishTo4326 = Proj.Transformation("EPSG:3042", "EPSG:4326", always_xy=true) # ETRS89 / UTM zone 30N to WGS84
-#transSpanishTo4326 = Proj.Transformation("EPSG:25830", "EPSG:4326", always_xy=true) # ETRS89 / UTM zone 30N to WGS84
-
 
 function extract_spanish_network_and_feeder(file_path::String; pattern = r"(?i)\\Feeder_(\d+)_Ntw_(\d+).dss")
     
