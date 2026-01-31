@@ -28,7 +28,7 @@ Re-exports utility functions for PowerModelsDistributionStateEstimation workflow
 - Measurement residual analysis
 - Measurement data processing and writing
 
-### PMDPlotting
+### PMDGraph
 Re-exports plotting functions for network visualization including:
 - Network tree visualization
 - Coordinate-based network plotting

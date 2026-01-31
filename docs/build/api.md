@@ -49,12 +49,12 @@ Private = false
 
 ---
 
-## Plotting (PMDPlotting)
+## Plotting (PMDGraph)
 
 Visualization tools for network graphs, coordinates, and map overlays.
 
 ```@autodocs
-Modules = [Pliers.PMDPlotting]
+Modules = [Pliers.PMDGraph]
 Order = [:module, :constant, :type, :function, :macro]
 Public = true
 Private = false

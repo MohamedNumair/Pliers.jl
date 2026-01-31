@@ -59,7 +59,7 @@ pages = [
 ]
 
 makedocs(;
-    modules = [Pliers, Pliers.PMDUtils, Pliers.PMDSEUtils, Pliers.PMDPlotting],
+    modules = [Pliers, Pliers.PMDUtils, Pliers.PMDSEUtils, Pliers.PMDGraph],
     authors = AUTHORS,
     sitename = "$NAME.jl",
     version = PROJECT_VERSION,

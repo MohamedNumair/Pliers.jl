@@ -9,7 +9,7 @@ for simplified reporting, analysis, and visualization.
 The package provides optional sub-module access for organized imports:
 - `PMDUtils`: Re-exports PMD-related utility functions
 - `PMDSEUtils`: Re-exports PMDSE-related utility functions  
-- `PMDPlotting`: Re-exports plotting functions
+- `PMDGraph`: Re-exports plotting functions
 
 # Author
 Mohamed Numair (mnumair.com)
@@ -111,20 +111,10 @@ include("io/networks_io.jl")
 include("io/util-enwl-networks.jl")
 include("io/util-spanish-networks.jl")
 
-#PMD
-include("core/PMD/pmd_utils.jl")
-include("core/PMD/network_graph.jl")
-include("core/PMD/results_explorer.jl")
-include("core/PMD/eng_explorer.jl")
-include("core/PMD/math_explorer.jl")
-include("core/PMD/network_plotting.jl")
-
-#PMDSE
-include("core/PMDSE/pmdse_utils.jl")
 
 # Sub-modules for organized namespace
 include("modules/PMDUtils.jl")
 include("modules/PMDSEUtils.jl")
-include("modules/PMDPlotting.jl")
+include("modules/PMDGraph.jl")
 
 end # module Pliers

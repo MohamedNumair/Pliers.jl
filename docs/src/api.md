@@ -26,11 +26,11 @@ Re-exports PMDSE-related utility functions. These functions are also available d
 Modules = [Pliers.PMDSEUtils]
 ```
 
-## PMDPlotting Sub-module
+## PMDGraph Sub-module
 
 Re-exports network visualization and plotting functions. These functions are also available directly from the main Pliers module.
 
 ```@autodocs
-Modules = [Pliers.PMDPlotting]
+Modules = [Pliers.PMDGraph]
 ```
 
