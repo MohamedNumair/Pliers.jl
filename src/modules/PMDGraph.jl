@@ -14,6 +14,19 @@ See the main Pliers module for function documentation.
 module PMDGraph
 
 using ..Pliers
+using ..PMDUtils
+using ..PMDUtils: _is_eng
+
+
+# plotting packages
+using Makie
+# using MakieCore
+using CairoMakie
+using WGLMakie
+if Sys.iswindows()
+    # using GLMakie
+end
+
 using GraphMakie
 using GeoMakie
 using Proj
@@ -37,6 +50,18 @@ using MetaGraphs
                                                                                                                                                   
                                                                                                                                                   
 =#
+
+
+# function _is_eng(graph::MetaDiGraph)
+
+#     if haskey(first(graph.eprops).second, :branch_id)
+#         return false
+#     else
+#         return true
+#     end
+#     error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
+# end
+
 
 """
     create_network_graph(data::Dict{String,Any}, fallback_layout)
@@ -83,7 +108,7 @@ A tuple containing:
 
 # Examples
 ```julia
-network_graph, layout, eng_sym = create_network_graph_eng(eng, GraphMakie.Buchheim())
+network_graph, layout, eng_sym = create_network_graph_eng(eng, GraphMakie.Spring())
 ```
 """
 function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
@@ -133,7 +158,8 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     for (l, line) in eng_sym[:line]
         line[:line_id] = l
-        line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])]
+        
+        haskey(line, :linecode) && (line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])])
 
     end
 
@@ -227,7 +253,7 @@ A tuple containing:
 
 # Examples
 ```julia
-network_graph, layout, math_sym = create_network_graph_math(math, GraphMakie.Buchheim())
+network_graph, layout, math_sym = create_network_graph_math(math, GraphMakie.Spring())
 ```
 """
 function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
@@ -500,15 +526,6 @@ end
 
 # edge_color = [get_graph_edge(G, edge)[:linecodes][:rs] for edge in edges(G)]
 
-function _is_eng(graph::MetaDiGraph)
-
-    if haskey(first(graph.eprops).second, :branch_id)
-        return false
-    else
-        return true
-    end
-    error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
-end
 
 #=
 ░███    ░██ ░██████████ ░██████████░██       ░██   ░██████   ░█████████  ░██     ░██    ░█████████  ░██           ░██████   ░██████████
@@ -565,7 +582,7 @@ transBritishto4326 = Proj.Transformation("EPSG:27700", "EPSG:4326", always_xy=tr
 
 
 """
-    network_graph_plot(network_graph::MetaDiGraph; layout=GraphMakie.Buchheim(), figure_size=(1000, 1200), node_color=:black, node_size=automatic, node_marker=automatic, node_strokewidth=automatic, show_node_labels=false, show_edge_labels=false, edge_color=:black, elabels_color=:black, elabels_fontsize=10, tangents=((0,-1),(0,-1)), arrow_show=false, arrow_marker='➤', arrow_size=50, arrow_shift=0.5)
+    network_graph_plot(network_graph::MetaDiGraph; layout=GraphMakie.Spring(), figure_size=(1000, 1200), node_color=:black, node_size=automatic, node_marker=automatic, node_strokewidth=automatic, show_node_labels=false, show_edge_labels=false, edge_color=:black, elabels_color=:black, elabels_fontsize=10, tangents=((0,-1),(0,-1)), arrow_show=false, arrow_marker='➤', arrow_size=50, arrow_shift=0.5)
 
 Plots the given network graph using the specified layout and styling options.
 
@@ -573,7 +590,7 @@ Plots the given network graph using the specified layout and styling options.
 - `network_graph::MetaDiGraph`: The network graph to be plotted.
 
 # Keyword Arguments
-- `layout`: The layout algorithm to use for positioning the nodes (default: `GraphMakie.Buchheim()`).
+- `layout`: The layout algorithm to use for positioning the nodes (default: `GraphMakie.Spring()`).
 - `figure_size`: The size of the figure in pixels (default: `(1000, 1200)`).
 - `node_color`: The color of the nodes (default: `:black`).
 - `node_size`: The size of the nodes (default: `automatic`).
@@ -595,7 +612,7 @@ Plots the given network graph using the specified layout and styling options.
 
 # Example
 ```julia
-f, ax, p = network_graph_plot(network_graph; layout=GraphMakie.Buchheim(), figure_size=(1000, 1200), node_color=:black, node_size=automatic, node_marker=automatic, node_strokewidth=automatic, show_node_labels=false, show_edge_labels=false, edge_color=:black, elabels_color=:black, elabels_fontsize=10, tangents=((0,-1),(0,-1)), arrow_show=false, arrow_marker='➤', arrow_size=50, arrow_shift=0.5)
+f, ax, p = network_graph_plot(network_graph; layout=GraphMakie.Spring(), figure_size=(1000, 1200), node_color=:black, node_size=automatic, node_marker=automatic, node_strokewidth=automatic, show_node_labels=false, show_edge_labels=false, edge_color=:black, elabels_color=:black, elabels_fontsize=10, tangents=((0,-1),(0,-1)), arrow_show=false, arrow_marker='➤', arrow_size=50, arrow_shift=0.5)
 ```
 """
 function network_graph_plot(
@@ -603,7 +620,7 @@ function network_graph_plot(
 
     # figure
     makie_backend=WGLMakie,
-    layout=GraphMakie.Buchheim(),
+    layout=GraphMakie.Spring(), #layout=GraphMakie.Spring(),
     figure_size=(1000, 1200), #resolution
 
     #nodes
@@ -633,7 +650,7 @@ function network_graph_plot(
     makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
-
+    @debug "The used layout is: $layout"
     return graphplot(
         network_graph;
         layout=layout,
@@ -674,7 +691,7 @@ function network_graph_plot!(
 
     # figure
     makie_backend=WGLMakie,
-    layout=GraphMakie.Buchheim(),
+    layout=GraphMakie.Spring(),
     figure_size=(1000, 1200), #resolution
 
     #nodes
@@ -750,7 +767,7 @@ function network_graph_plot!(
 
     # figure
     makie_backend=WGLMakie,
-    layout=GraphMakie.Buchheim(),
+    layout=GraphMakie.Spring(),
     figure_size=(1000, 1200), #resolution
 
     #nodes
@@ -1049,7 +1066,7 @@ function plot_network_tree(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
-    layout=GraphMakie.Buchheim(),
+    layout=GraphMakie.Spring(),
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1136,7 +1153,7 @@ function plot_network_tree!(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
-    layout=GraphMakie.Buchheim(),
+    layout=GraphMakie.Spring(),
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1195,7 +1212,7 @@ end
 
 
 """
-    plot_network_coords(eng::Dict{String,Any}; show_node_labels=false, show_edge_labels=false, fallback_layout=GraphMakie.Buchheim(), kwargs...)
+    plot_network_coords(eng::Dict{String,Any}; show_node_labels=false, show_edge_labels=false, fallback_layout=GraphMakie.Spring(), kwargs...)
 
 Plot a network graph with optional node and edge labels.
 
@@ -1203,7 +1220,7 @@ Plot a network graph with optional node and edge labels.
 - `eng::Dict{String,Any}`: The engineering data used to create the network graph.
 - `show_node_labels::Bool`: Whether to display labels for the nodes. Default is `false`.
 - `show_edge_labels::Bool`: Whether to display labels for the edges. Default is `false`.
-- `fallback_layout`: The layout algorithm to use if no specific layout is provided. Default is `GraphMakie.Buchheim()`.
+- `fallback_layout`: The layout algorithm to use if no specific layout is provided. Default is `GraphMakie.Spring()`.
 - `network_graph::MetaDiGraph`: The network graph to be plotted.
 - `GraphLayout::Function`: The layout function for positioning the nodes.
 - `tiles_provider`: The tile provider for the map background. Default is `TileProviders.Google(:satelite)`.
@@ -1243,7 +1260,7 @@ function plot_network_coords(
     show_node_labels=false,
     show_edge_labels=false,
     show_load_labels=false,
-    fallback_layout=GraphMakie.Buchheim(),
+    fallback_layout=GraphMakie.Spring(),
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1303,7 +1320,7 @@ function plot_network_coords!(
     data::Dict{String,Any};
     show_node_labels=false,
     show_edge_labels=false,
-    fallback_layout=GraphMakie.Buchheim(),
+    fallback_layout=GraphMakie.Spring(),
     edge_labels_type=:line_id,
     kwargs...
 )
@@ -1388,7 +1405,7 @@ function plot_network_map(
     phase="1",
     kwargs...
 )
-    network_graph, GraphLayout = create_network_graph(data, GraphMakie.Buchheim())
+    network_graph, GraphLayout = create_network_graph(data, GraphMakie.Spring())
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
@@ -1605,7 +1622,7 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
                             error("Unexpected connections: $(edge[:t_connections])")
                         end
                     elseif length(edge[:t_connections]) == 4
-                        if edge[:t_connections] == [1, 2, 3, 4]
+                        if length(edge[:t_connections]) == 4 
                             edge[:edge_color] = :purple
                         else
                             error("Unexpected connections: $(edge[:t_connections])")
