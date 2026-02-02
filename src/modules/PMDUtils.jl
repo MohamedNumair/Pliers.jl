@@ -1352,7 +1352,7 @@ If `return_dict == true`, returns a `Dict{String,Any}` with the following keys:
 - is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ = calc_bases_from_dict(data)
 - bases = calc_bases_from_dict(data; return_dict=true)
 """
-function calc_bases_from_dict(data::Dict{String,Any}; return_dict = false)   
+function calc_bases_from_dict(data::Dict{String,Any}; return_dict = true)   
     
 
     is_perunit = haskey(data, "per_unit") ? data["per_unit"] : false
