@@ -2301,6 +2301,7 @@ component of the power flow solution.
 - The `formulation` parameter allows customization of the solution processing based on the formulation type.
 """
 function dictify_solution!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; formulation = "IVR")
+    pf_sol = haskey(pf_sol,"solution") ? pf_sol["solution"] : pf_sol
     solution_dictify_buses!(pf_sol, math; formulation = formulation)
     solution_dictify_loads!(pf_sol, math; formulation = formulation)
     solution_dictify_branches!(pf_sol, math; formulation = formulation)
