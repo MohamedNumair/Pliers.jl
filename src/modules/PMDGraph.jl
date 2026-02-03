@@ -213,7 +213,8 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     # add transformers as edges based on f_bus and t_bus
     if haskey(eng_sym, :transformer)
-        for (_, transformer) in eng_sym[:transformer]
+        for (t_id, transformer) in eng_sym[:transformer]
+            transformer[:line_id] = t_id
             f_bus = Symbol(transformer[:bus][1])
             t_bus = Symbol(transformer[:bus][2])
             f_vertex = network_graph[f_bus, :bus_id]
@@ -1087,7 +1088,7 @@ function plot_network_tree(
         node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show = true
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
         arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -1174,7 +1175,7 @@ function plot_network_tree!(
         node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show = true
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
         arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -1282,7 +1283,7 @@ function plot_network_coords(
         node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
         _decorate_edges(network_graph, data)
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show = true
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
         arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -1424,7 +1425,7 @@ function plot_network_map(
             node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
             _decorate_edges(network_graph, data)
             edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-            arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+            arrow_show = true
             arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
             arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
             arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -1554,8 +1555,9 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                     node[:node_marker] = :circle
                     node[:marker_size] = 1
                 end
-            end
+            end    
         end
+
     else
         # TODO: MATH related formatting
     end
@@ -1568,10 +1570,10 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
             # Set default arrow properties
             edge[:arrow_show] = false
             edge[:arrow_marker] = '⠀' #'↡' 
-            edge[:arrow_size] = 12
+            edge[:arrow_size] = 0
             edge[:arrow_shift] = 0.5
 
-            if !haskey(edge, :t_connections) # I am suing this to determine that it is a transformer not a line
+            if !haskey(edge, :t_connections) # I am using this to determine that it is a transformer not a line
                 edge[:edge_color] = :gold
                 edge[:arrow_show] = true
                 edge[:arrow_marker] = 'Ꝏ'
