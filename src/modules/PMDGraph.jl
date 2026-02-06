@@ -105,128 +105,194 @@ A tuple containing:
 - `network_graph::MetaDiGraph`: The constructed network graph.
 - `GraphLayout::Function`: Layout function for plotting (coordinate-based or fallback).
 - `eng_sym::Dict{Symbol,Any}`: Copy of input data with keys converted to symbols.
-
-# Examples
-```julia
-network_graph, layout, eng_sym = create_network_graph_eng(eng, GraphMakie.Spring())
-```
 """
 function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     eng_sym = convert_keys_to_symbols(deepcopy(eng))
     network_graph = MetaDiGraph()
 
-    lons = []
-    lats = []
+    # --- 1. Add Vertices (Buses) ---
+    # Determine Root Bus (Source Bus)
+    ref_bus_name = Symbol("")
+    if haskey(eng_sym, :voltage_source) && haskey(eng_sym[:voltage_source], :source)
+         ref_bus_name = Symbol(eng_sym[:voltage_source][:source][:bus])
+    end
 
-    # Add bus keys as :bus_id and collect coordinates if present # and enrich the buses with loads and shunts connected to them
+    # Add root first if it exists
+    if ref_bus_name != Symbol("") && haskey(eng_sym[:bus], ref_bus_name)
+         bus = eng_sym[:bus][ref_bus_name]
+         bus[:bus_id] = ref_bus_name
+         bus[:loads] = []
+         bus[:shunts] = []
+         bus[:voltage_sources] = []
+         add_vertex!(network_graph, bus)
+    end
+
     for (b, bus) in eng_sym[:bus]
-        bus[:bus_id] = b
+        # Skip if already added
+        if b == ref_bus_name 
+            continue 
+        end
+
+        # Ensure bus_id is stored consistently
+        bus[:bus_id] = b 
+        
+        # Initialize connection lists
         bus[:loads] = []
         bus[:shunts] = []
-        # attach loads
-        if haskey(eng_sym, :load)
-            for (_, load) in eng_sym[:load]
-                if Symbol(load[:bus]) == bus[:bus_id]
-                    push!(bus[:loads], load)
-                end
+        bus[:voltage_sources] = []
+
+        add_vertex!(network_graph, bus)
+    end
+
+    # Use bus_id as the indexing property immediately after adding all vertices
+    set_indexing_prop!(network_graph, :bus_id)
+
+    # --- 2. Enrich Bus Data ---
+    # Attach loads
+    if haskey(eng_sym, :load)
+        for (_, load) in eng_sym[:load]
+            bus_id = Symbol(load[:bus])
+            try
+                vertex_idx = network_graph[bus_id, :bus_id]
+                push!(network_graph.vprops[vertex_idx][:loads], load)
+            catch
+                @warn "Load connected to missing bus: $bus_id"
             end
         end
-        # attach shunts
-        if haskey(eng_sym, :shunt)
-            for (_, shunt) in eng_sym[:shunt]
-                if Symbol(shunt[:bus]) == bus[:bus_id]
-                    push!(bus[:shunts], shunt)
-                end
+    end
+
+    # Attach shunts
+    if haskey(eng_sym, :shunt)
+        for (_, shunt) in eng_sym[:shunt]
+            bus_id = Symbol(shunt[:bus])
+            try
+                vertex_idx = network_graph[bus_id, :bus_id]
+                push!(network_graph.vprops[vertex_idx][:shunts], shunt)
+            catch
+                @warn "Shunt connected to missing bus: $bus_id"
             end
         end
+    end
 
-        # attach gens
-        if haskey(eng_sym, :voltage_source)
-            for (_, voltage_source) in eng_sym[:voltage_source]
-                if Symbol(voltage_source[:bus]) == bus[:bus_id]
-                    bus[:voltage_sources] = voltage_source
-                end
+    # Attach voltage sources
+    if haskey(eng_sym, :voltage_source)
+        for (_, vs) in eng_sym[:voltage_source]
+            bus_id = Symbol(vs[:bus])
+            try
+                vertex_idx = network_graph[bus_id, :bus_id]
+                push!(network_graph.vprops[vertex_idx][:voltage_sources], vs)
+            catch
+                @warn "Voltage source connected to missing bus: $bus_id"
             end
         end
+    end
+    
+    # --- 3. Add Edges (Lines & Transformers) ---
+    # Used to track connectivity for coordinate inference
+    adj_list = Dict{Symbol, Vector{Symbol}}() 
 
-
-        if haskey(bus, :lon) && haskey(bus, :lat)
-            push!(lons, bus[:lon])
-            push!(lats, bus[:lat])
+    # Helper to add edge and track adjacency
+    function safe_add_edge!(f_id, t_id, data)
+        try
+            f_v = network_graph[f_id, :bus_id]
+            t_v = network_graph[t_id, :bus_id]
+            add_edge!(network_graph, f_v, t_v, data)
+            
+            # Track adjacency for coordinate back-propagation
+            push!(get!(adj_list, f_id, []), t_id)
+            push!(get!(adj_list, t_id, []), f_id)
+        catch e
+            @warn "Could not add edge between $f_id and $t_id: $e"
         end
     end
 
     for (l, line) in eng_sym[:line]
         line[:line_id] = l
-        
-        haskey(line, :linecode) && (line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])])
-
-    end
-
-
-    ### DETERMINE THE ROOT BUS
-    sourcebus = eng_sym[:voltage_source][:source][:bus]
-
-    # Determine source coordinates if available # and enrich the lines with the linecodes details
-    lon_s, lat_s = nothing, nothing
-    if length(lons) > 0
-        source_line = findfirst(line -> line[:f_bus] == sourcebus, eng_sym[:line])
-        if source_line !== nothing
-            lon_s = eng_sym[:bus][Symbol(eng_sym[:line][source_line][:t_bus])][:lon]
-            lat_s = eng_sym[:bus][Symbol(eng_sym[:line][source_line][:t_bus])][:lat]
+        if haskey(line, :linecode) && haskey(eng_sym, :linecode)
+             line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])]
         end
+        safe_add_edge!(Symbol(line[:f_bus]), Symbol(line[:t_bus]), line)
     end
 
-    layouting_vector = []
-
-    # Add `sourcebus` as the root
-    if haskey(eng_sym[:bus], Symbol(sourcebus))
-        add_vertex!(network_graph, eng_sym[:bus][Symbol(sourcebus)])
-        if length(lons) > 0 && lon_s !== nothing && lat_s !== nothing
-            push!(layouting_vector, (lon_s, lat_s))
-        end
-    else
-        error("sourcebus not found in the bus data. Please add sourcebus to the bus data.")
-    end
-
-    # Add the rest of the buses
-    for (_, bus) in eng_sym[:bus]
-        if bus[:bus_id] != Symbol(sourcebus)
-            add_vertex!(network_graph, bus)
-            if haskey(bus, :lon) && haskey(bus, :lat)
-                push!(layouting_vector, (bus[:lon], bus[:lat]))
+    if haskey(eng_sym, :transformer)
+        for (t_id, trans) in eng_sym[:transformer]
+            trans[:line_id] = t_id
+            # Transformers in eng model connect array of buses
+            buses = trans[:bus]
+            if length(buses) >= 2
+                safe_add_edge!(Symbol(buses[1]), Symbol(buses[2]), trans)
             end
         end
     end
 
-    # Use bus_id as the indexing property
-    set_indexing_prop!(network_graph, :bus_id)
-
-    # Add edges based on f_bus and t_bus
-    for (_, line) in eng_sym[:line]
-        f_bus = Symbol(line[:f_bus])
-        t_bus = Symbol(line[:t_bus])
-        f_vertex = network_graph[f_bus, :bus_id]
-        t_vertex = network_graph[t_bus, :bus_id]
-        add_edge!(network_graph, f_vertex, t_vertex, line)
-    end
-
-    # add transformers as edges based on f_bus and t_bus
-    if haskey(eng_sym, :transformer)
-        for (t_id, transformer) in eng_sym[:transformer]
-            transformer[:line_id] = t_id
-            f_bus = Symbol(transformer[:bus][1])
-            t_bus = Symbol(transformer[:bus][2])
-            f_vertex = network_graph[f_bus, :bus_id]
-            t_vertex = network_graph[t_bus, :bus_id]
-            add_edge!(network_graph, f_vertex, t_vertex, transformer)
+    # --- 4. Coordinate Handling & Root Fix ---
+    
+    # Collect existing coordinates
+    # We iterate over vertices to respect the graph order (1..nv) for layout vectors
+    layouting_vector = Vector{Tuple{Float64, Float64}}(undef, nv(network_graph))
+    has_coords = fill(false, nv(network_graph))
+    
+    for v in vertices(network_graph)
+        bus_props = props(network_graph, v)
+        if haskey(bus_props, :lon) && haskey(bus_props, :lat)
+            layouting_vector[v] = (bus_props[:lon], bus_props[:lat])
+            has_coords[v] = true
         end
     end
-    # Decide on the layout
-    if length(layouting_vector) > 1
-        GraphLayout = _ -> layouting_vector
+
+    # Fix missing coordinates for root buses (or any bus) by looking at neighbors
+    # This is a simple 1-hop look-ahead. Can be expanded to BFS if needed.
+    
+    # Identify likely root buses (those with voltage sources)
+    root_candidates = []
+    if haskey(eng_sym, :voltage_source)
+        for (_, vs) in eng_sym[:voltage_source]
+            push!(root_candidates, Symbol(vs[:bus]))
+        end
+    end
+
+    # Also iterate all buses to patch holes generally
+    for _ in 1:2 # Two passes for propagation
+        for v in vertices(network_graph)
+            if !has_coords[v]
+                # Look for a neighbor with coordinates
+                v_sym = get_prop(network_graph, v, :bus_id)
+                neighbors = get(adj_list, v_sym, [])
+                for neighbor_id in neighbors
+                   try
+                        v_neighbor = network_graph[neighbor_id, :bus_id]
+                        if has_coords[v_neighbor]
+                            layouting_vector[v] = layouting_vector[v_neighbor]
+                            has_coords[v] = true
+                            # Update the property in the graph as well for consistency
+                            set_prop!(network_graph, v, :lon, layouting_vector[v_neighbor][1])
+                            set_prop!(network_graph, v, :lat, layouting_vector[v_neighbor][2])
+                            break 
+                        end
+                   catch; end
+                end
+            end
+        end
+    end
+
+    # Layout function construction
+    if sum(has_coords) > 0 # At least some coordinates exist
+        GraphLayout = function(g) 
+            final_layout = []
+            for i in 1:nv(g)
+                if has_coords[i]
+                    push!(final_layout, layouting_vector[i])
+                else
+                    push!(final_layout, (0.0, 0.0)) # Placeholder
+                end
+            end
+            return final_layout
+        end
+        if sum(has_coords) < nv(network_graph)
+             @warn "Only $(sum(has_coords)) of $(nv(network_graph)) buses have coordinates. Use fallback for missing ones?"
+        end
     else
-        @warn "Note there were no coordinates found for plotting, the fallback (e.g. tree layout) layout will be used"
+        @warn "No coordinates found in ENGINEERING model. Using fallback layout."
         GraphLayout = fallback_layout
     end
 
@@ -251,156 +317,186 @@ A tuple containing:
 - `network_graph::MetaDiGraph`: The constructed network graph.
 - `GraphLayout::Function`: Layout function for plotting (coordinate-based or fallback).
 - `math_sym::Dict{Symbol,Any}`: Copy of input data with keys converted to symbols.
-
-# Examples
-```julia
-network_graph, layout, math_sym = create_network_graph_math(math, GraphMakie.Spring())
-```
 """
 function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     math_sym = convert_keys_to_symbols(deepcopy(math))
     network_graph = MetaDiGraph()
-
-    lons = []
-    lats = []
-
-    # Add bus keys as :bus_id and collect coordinates if present # and enrich the buses with loads and shunts connected to them
+    
+    # --- 1. Add Vertices (Buses) ---
+    # Prioritize adding Root/Virtual buses first for layout algorithms (Buchheim)
+    
+    # 1. Find physical reference bus (type 3)
+    phys_ref_id = nothing
     for (b, bus) in math_sym[:bus]
-        bus[:bus_id] = b
-        bus[:loads] = []
-        bus[:shunts] = []
-        if haskey(math_sym, :load)
-            for (l, load) in math_sym[:load]
-                if Symbol(load[:load_bus]) == bus[:bus_id]
-                    push!(bus[:loads], load)
-                end
-            end
-        end
-
-        if haskey(math_sym, :shunt)
-            for (_, shunt) in math_sym[:shunt]
-                if Symbol(shunt[:shunt_bus]) == bus[:bus_id]
-                    push!(bus[:shunts], shunt)
-                end
-            end
-        end
-
-        # gen 
-
-        if haskey(math_sym, :gen)
-            for (_, gen) in math_sym[:gen]
-                if Symbol(gen[:gen_bus]) == bus[:bus_id]
-                    bus[:gens] = gen
-                end
-            end
-        end
-
-
-        if haskey(bus, :lon) && haskey(bus, :lat)
-            push!(lons, bus[:lon])
-            push!(lats, bus[:lat])
+        if get(bus, :bus_type, 1) == 3
+            phys_ref_id = b
+            break
         end
     end
 
-    # Add branch keys as :branch_id 
-    for (l, branch) in math_sym[:branch]
-        branch[:branch_id] = l
-
-    end
-
-
-
-    # Determine source coordinates if available 
-    lon_s, lat_s = nothing, nothing
-    if length(lons) > 0
-
-        sourcebus = findfirst(bus -> contains(bus["name"], "sourcebus"), math["bus"])
-        display(sourcebus)
-        virtual_branch = findfirst(branch -> contains(string(branch["f_bus"]), sourcebus), math["branch"])
-        @warn "virtual branch"
-        display(virtual_branch)
-        display(math_sym[:branch][Symbol(virtual_branch)])
-
-        gen_branch = findfirst(branch -> contains(string(branch["f_bus"]), sourcebus), math["branch"])
-        @warn "gen branch"
-        display(gen_branch)
-        display(math_sym[:branch][Symbol(gen_branch)])
-
-        #virtual_branch = findfirst(branch -> contains(branch["name"], "_virtual_branch.voltage_source.source"), math["branch"])
-
-
-        if virtual_branch !== nothing
-            # @warn "The virtual bus params"
-            # display(math_sym[:branch][Symbol(virtual_branch)])  
-
-            # @warn "The virtual branch params"
-            # display(math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:t_bus])])
-
-
-            lon_s = math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:t_bus])][:lon]
-            lat_s = math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:t_bus])][:lat]
+    # 2. Check for "virtual bus" upstream (connected via branch where ref is t_bus)
+    virt_bus_id = nothing
+    if phys_ref_id !== nothing
+        for (_, branch) in math_sym[:branch]
+             # math keys might differ in type (int vs symbol), check carefully or rely on consistency
+             if branch[:t_bus] == phys_ref_id
+                  virt_bus_id = branch[:f_bus]
+                  break 
+             end
         end
     end
-
-    layouting_vector = []
-
-    # Add `sourcebus` as the root
-    virtual_bus = findfirst(bus -> contains(bus[:name], "virtual_bus.voltage_source.source"), math_sym[:bus])
-
-    if haskey(math_sym[:bus], virtual_bus)
-        # Prefer the virtual bus own coordinates if they exist
-        if haskey(math_sym[:bus][virtual_bus], :lon) && haskey(math_sym[:bus][virtual_bus], :lat)
-            add_vertex!(network_graph, math_sym[:bus][virtual_bus])
-            push!(layouting_vector, (math_sym[:bus][virtual_bus][:lon], math_sym[:bus][virtual_bus][:lat]))
-
-        elseif lon_s !== nothing && lat_s !== nothing
-            # fallback to inferred source branch target coords
-
-            add_vertex!(network_graph, math_sym[:bus][virtual_bus])
-            push!(layouting_vector, (lon_s, lat_s))
-
-            add_vertex!(network_graph, math_sym[:bus][Symbol(math_sym[:branch][Symbol(virtual_branch)][:f_bus])])
-            push!(layouting_vector, (lon_s, lat_s))
-
-
-        end
-    else
-        error("sourcebus not found in the bus data. Please add sourcebus to the bus data.")
-    end
-
-    # Add the rest of the buses
-    for (_, bus) in math_sym[:bus]
-        if (bus[:bus_id] != virtual_bus) && (bus[:bus_id] != Symbol(math_sym[:branch][Symbol(virtual_branch)][:f_bus]))
+    
+    priority_buses = Set()
+    
+    # helper to add bus
+    function add_bus_node!(b_id)
+        if haskey(math_sym[:bus], b_id) && !(b_id in priority_buses)
+            bus = math_sym[:bus][b_id]
+            bus[:bus_id] = b_id
+            bus[:loads] = []
+            bus[:shunts] = []
+            bus[:gens] = []
             add_vertex!(network_graph, bus)
-            if haskey(bus, :lon) && haskey(bus, :lat)
-                push!(layouting_vector, (bus[:lon], bus[:lat]))
-            end
+            push!(priority_buses, b_id)
         end
     end
 
-    # Use bus_id as the indexing property
+    # Add in order: Virtual -> Physical Ref
+    if virt_bus_id !== nothing add_bus_node!(virt_bus_id) end
+    if phys_ref_id !== nothing add_bus_node!(phys_ref_id) end
+
+    for (b, bus) in math_sym[:bus]
+        if !(b in priority_buses)
+            bus[:bus_id] = b
+            bus[:loads] = []
+            bus[:shunts] = []
+            bus[:gens] = []
+
+            add_vertex!(network_graph, bus)
+        end
+    end
+
+    # Set indexing property
     set_indexing_prop!(network_graph, :bus_id)
 
-    # Add edges based on f_bus and t_bus
-    for (_, branch) in math_sym[:branch]
-        f_bus = Symbol(branch[:f_bus])
-        t_bus = Symbol(branch[:t_bus])
-        f_vertex = network_graph[f_bus, :bus_id]
-        t_vertex = network_graph[t_bus, :bus_id]
-        add_edge!(network_graph, f_vertex, t_vertex, branch)
+    # --- 2. Enrich Bus Data ---
+    if haskey(math_sym, :load)
+        for (_, load) in math_sym[:load]
+            try
+                bus_id = Symbol(load[:load_bus]) # math model often uses ints, ensure key match
+                
+                # Robust lookup: try direct, then Symbol, then Int
+                v_idx = nothing
+                try v_idx = network_graph[bus_id, :bus_id] catch; end
+                
+                if !isnothing(v_idx)
+                    push!(network_graph.vprops[v_idx][:loads], load)
+                end
+            catch e
+                @debug "Failed to attach load: $e"
+            end
+        end
     end
 
-    # Decide on the layout
-    if length(layouting_vector) > 1
-        # Ensure full coverage; if partial, fall back
-        if length(layouting_vector) == nv(network_graph)
-            GraphLayout = _ -> layouting_vector
-        else
-            @warn "Incomplete coordinate set ($(length(layouting_vector)) of $(nv(network_graph)) buses); using fallback layout"
-            GraphLayout = fallback_layout
+    if haskey(math_sym, :shunt)
+        for (_, shunt) in math_sym[:shunt]
+            try
+                bus_id = Symbol(shunt[:shunt_bus])
+                v_idx = nothing
+                try v_idx = network_graph[bus_id, :bus_id] catch; end
+                if !isnothing(v_idx)
+                     push!(network_graph.vprops[v_idx][:shunts], shunt)
+                end
+            catch; end
+        end
+    end
+
+    if haskey(math_sym, :gen)
+        for (_, gen) in math_sym[:gen]
+            try
+                bus_id = Symbol(gen[:gen_bus])
+                v_idx = nothing
+                try v_idx = network_graph[bus_id, :bus_id] catch; end
+                if !isnothing(v_idx)
+                     push!(network_graph.vprops[v_idx][:gens], gen)
+                end
+            catch; end
+        end
+    end
+
+    # --- 3. Add Edges (Branches) ---
+    adj_list = Dict{Any, Vector{Any}}()
+
+    for (l, branch) in math_sym[:branch]
+        branch[:branch_id] = l
+        
+        f_bus = Symbol(branch[:f_bus])
+        t_bus = Symbol(branch[:t_bus])
+
+        try
+            f_vertex = network_graph[f_bus, :bus_id]
+            t_vertex = network_graph[t_bus, :bus_id]
+            
+            add_edge!(network_graph, f_vertex, t_vertex, branch)
+            
+            push!(get!(adj_list, f_bus, []), t_bus)
+            push!(get!(adj_list, t_bus, []), f_bus)
+        catch e
+            @warn "Error adding edge for branch $(l) ($f_bus -> $t_bus): $e"
+        end
+    end
+
+    # --- 4. Coordinate Handling ---
+    layouting_vector = Vector{Tuple{Float64, Float64}}(undef, nv(network_graph))
+    has_coords = fill(false, nv(network_graph))
+
+    for v in vertices(network_graph)
+        bus_props = props(network_graph, v)
+        if haskey(bus_props, :lon) && haskey(bus_props, :lat)
+            layouting_vector[v] = (bus_props[:lon], bus_props[:lat])
+            has_coords[v] = true
+        end
+    end
+
+    # Propagate coordinates to any node missing them from neighbors
+    # (Covers RefBus -> VirtualGenBus and similar cases)
+    for _ in 1:2 
+        for v in vertices(network_graph)
+            if !has_coords[v]
+                # Check neighbors
+                bus_id = get_prop(network_graph, v, :bus_id)
+                neighbors = get(adj_list, bus_id, [])
+                
+                for n_id in neighbors
+                    try
+                        n_v = network_graph[n_id, :bus_id]
+                        if has_coords[n_v]
+                            layouting_vector[v] = layouting_vector[n_v]
+                            has_coords[v] = true
+                            set_prop!(network_graph, v, :lon, layouting_vector[n_v][1])
+                            set_prop!(network_graph, v, :lat, layouting_vector[n_v][2])
+                            break
+                        end
+                    catch; end
+                end
+            end
+        end
+    end
+
+    if sum(has_coords) > 0
+        GraphLayout = function(g)
+            final_layout = []
+            for i in 1:nv(g)
+                if has_coords[i]
+                    push!(final_layout, layouting_vector[i])
+                else
+                    push!(final_layout, (0.0, 0.0))
+                end
+            end
+            return final_layout
         end
     else
-        @warn "Note there were no coordinates found for plotting, the fallback (e.g. tree layout) layout will be used"
+        @warn "No coordinates found in MATHEMATICAL model. Using fallback layout."
         GraphLayout = fallback_layout
     end
 
@@ -580,10 +676,42 @@ transSpanishTo4326 = Proj.Transformation("EPSG:3042", "EPSG:4326", always_xy=tru
 #transSpanishTo4326 = Proj.Transformation("EPSG:25830", "EPSG:4326", always_xy=true) # ETRS89 / UTM zone 30N to WGS84
 transBritishto4326 = Proj.Transformation("EPSG:27700", "EPSG:4326", always_xy=true) # British National Grid OSGB36 to WGS84
 
+"""
+    smart_layout(g)
+
+A smart layout function that checks if the graph `g` allows for a tree-based layout.
+If `g` is a tree (weakly connected and |E| = |V| - 1), it attempts to use `GraphMakie.Buchheim()`.
+If `Buchheim` fails or if the graph is not a tree, it falls back to `GraphMakie.Spring()`.
+"""
+function smart_layout(g)
+    is_tree = false
+    try 
+        if nv(g) > 0 && ne(g) == nv(g) - 1
+             if is_weakly_connected(g)
+                 is_tree = true
+             end
+        end
+    catch e
+        @warn "Tree check failed: $e"
+    end
+
+    if is_tree
+        try
+            return GraphMakie.Buchheim()(g)
+        catch e
+            @warn "Buchheim layout failed, falling back to Spring" exception=e
+            return GraphMakie.Spring()(g)
+        end
+    else
+        return GraphMakie.Spring()(g)
+    end
+end
+
+
 
 
 """
-    network_graph_plot(network_graph::MetaDiGraph; layout=GraphMakie.Spring(), figure_size=(1000, 1200), node_color=:black, node_size=automatic, node_marker=automatic, node_strokewidth=automatic, show_node_labels=false, show_edge_labels=false, edge_color=:black, elabels_color=:black, elabels_fontsize=10, tangents=((0,-1),(0,-1)), arrow_show=false, arrow_marker='➤', arrow_size=50, arrow_shift=0.5)
+    network_graph_plot(network_graph::MetaDiGraph; layout=smart_layout, figure_size=(1000, 1200), node_color=:black, node_size=automatic, node_marker=automatic, node_strokewidth=automatic, show_node_labels=false, show_edge_labels=false, edge_color=:black, elabels_color=:black, elabels_fontsize=10, tangents=((0,-1),(0,-1)), arrow_show=false, arrow_marker='➤', arrow_size=50, arrow_shift=0.5)
 
 Plots the given network graph using the specified layout and styling options.
 
@@ -591,7 +719,7 @@ Plots the given network graph using the specified layout and styling options.
 - `network_graph::MetaDiGraph`: The network graph to be plotted.
 
 # Keyword Arguments
-- `layout`: The layout algorithm to use for positioning the nodes (default: `GraphMakie.Spring()`).
+- `layout`: The layout algorithm to use for positioning the nodes (default: `smart_layout`, which uses `Buchheim` for trees and `Spring` otherwise).
 - `figure_size`: The size of the figure in pixels (default: `(1000, 1200)`).
 - `node_color`: The color of the nodes (default: `:black`).
 - `node_size`: The size of the nodes (default: `automatic`).
@@ -621,7 +749,7 @@ function network_graph_plot(
 
     # figure
     makie_backend=WGLMakie,
-    layout=GraphMakie.Spring(), #layout=GraphMakie.Spring(),
+    layout=smart_layout, #layout=GraphMakie.Spring(),
     figure_size=(1000, 1200), #resolution
 
     #nodes
@@ -692,7 +820,7 @@ function network_graph_plot!(
 
     # figure
     makie_backend=WGLMakie,
-    layout=GraphMakie.Spring(),
+    layout=smart_layout,
     figure_size=(1000, 1200), #resolution
 
     #nodes
@@ -768,7 +896,7 @@ function network_graph_plot!(
 
     # figure
     makie_backend=WGLMakie,
-    layout=GraphMakie.Spring(),
+    layout=smart_layout,
     figure_size=(1000, 1200), #resolution
 
     #nodes
@@ -1067,7 +1195,7 @@ function plot_network_tree(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
-    layout=GraphMakie.Spring(),
+    layout=smart_layout,
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1154,7 +1282,7 @@ function plot_network_tree!(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
-    layout=GraphMakie.Spring(),
+    layout=smart_layout,
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1213,7 +1341,7 @@ end
 
 
 """
-    plot_network_coords(eng::Dict{String,Any}; show_node_labels=false, show_edge_labels=false, fallback_layout=GraphMakie.Spring(), kwargs...)
+    plot_network_coords(eng::Dict{String,Any}; show_node_labels=false, show_edge_labels=false, fallback_layout=smart_layout, kwargs...)
 
 Plot a network graph with optional node and edge labels.
 
@@ -1221,7 +1349,7 @@ Plot a network graph with optional node and edge labels.
 - `eng::Dict{String,Any}`: The engineering data used to create the network graph.
 - `show_node_labels::Bool`: Whether to display labels for the nodes. Default is `false`.
 - `show_edge_labels::Bool`: Whether to display labels for the edges. Default is `false`.
-- `fallback_layout`: The layout algorithm to use if no specific layout is provided. Default is `GraphMakie.Spring()`.
+- `fallback_layout`: The layout algorithm to use if no specific layout is provided. Default is `smart_layout`.
 - `network_graph::MetaDiGraph`: The network graph to be plotted.
 - `GraphLayout::Function`: The layout function for positioning the nodes.
 - `tiles_provider`: The tile provider for the map background. Default is `TileProviders.Google(:satelite)`.
@@ -1261,7 +1389,7 @@ function plot_network_coords(
     show_node_labels=false,
     show_edge_labels=false,
     show_load_labels=false,
-    fallback_layout=GraphMakie.Spring(),
+    fallback_layout=smart_layout,
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1321,7 +1449,7 @@ function plot_network_coords!(
     data::Dict{String,Any};
     show_node_labels=false,
     show_edge_labels=false,
-    fallback_layout=GraphMakie.Spring(),
+    fallback_layout=smart_layout,
     edge_labels_type=:line_id,
     kwargs...
 )
@@ -1406,7 +1534,7 @@ function plot_network_map(
     phase="1",
     kwargs...
 )
-    network_graph, GraphLayout = create_network_graph(data, GraphMakie.Spring())
+    network_graph, GraphLayout = create_network_graph(data, smart_layout)
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
@@ -1825,5 +1953,5 @@ export plot_network_tree, plot_network_tree!
 export plot_network_coords, plot_network_coords!
 export plot_network_map
 export bus_phasor, bus_phasor!
-
+export smart_layout
 end # module PMDGraph
