@@ -21,11 +21,15 @@ using Crayons
 using Crayons.Box
 using PrettyTables
 
+using DataFrames
+using CSV
 
 # data analysis packages
 using Statistics
 using LinearAlgebra
 
+
+_N_IDX = 4 # representing the neutral index in terminals 
 
 
 function get_m_n_dof(data::Dict)

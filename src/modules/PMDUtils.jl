@@ -41,6 +41,15 @@ end
 using Statistics
 using LinearAlgebra
 
+using DataFrames
+using CSV
+
+include("../core/styles.jl")
+include("../core/utils.jl")
+
+
+_N_IDX = 4 # representing the neutral index in terminals 
+
 # using Dates
 # using StatsPlots
 # using StatsBase
@@ -102,9 +111,9 @@ function eng_report(eng::Dict{String,Any}; detailed=false)
     print("             $(BOLD("$(length(get(eng, "transformer", [])))")) transformers, \n")
     print("             $(BOLD("$(length(get(eng, "time_series", [])))")) time series data points.\n")
 
-    _eng_summary_table(eng)
-
+    
     if detailed == true
+        _eng_extra_details_table(eng)
         buses_table(eng)
         lines_table(eng)
         loads_table(eng)
@@ -115,7 +124,7 @@ function eng_report(eng::Dict{String,Any}; detailed=false)
 
 end
 
-function _eng_summary_table(eng::Dict{String,Any})
+function _eng_extra_details_table(eng::Dict{String,Any})
     n_nodes = length(get(eng, "bus", Dict()))
     n_lines = length(get(eng, "line", Dict()))
     n_loads = length(get(eng, "load", Dict()))
@@ -216,28 +225,29 @@ function _eng_summary_table(eng::Dict{String,Any})
     n_linecodes = length(linecodes)
 
     data = [
-        "Number of nodes" n_nodes;
-        "Number of branches" n_lines;
-        "Number of loads" n_loads;
-        "Number Transformers" n_tfs;
-        "Total resistance" round(tot_r, digits=4);
-        "Total reactance" round(tot_x, digits=4);
+        #"Number of nodes" n_nodes;
+        #"Number of branches" n_lines;
+        #"Number of loads" n_loads;
+        #"Number Transformers" n_tfs;
+        "Total resistance (Ω)" round(tot_r, digits=4);
+        "Total reactance (Ω)" round(tot_x, digits=4);
         "Total MVA of transformers" round(tot_mva_val, digits=4);
         "Total length of lines (m)" round(tot_len, digits=4);
         #"Area (sq km)"              round(area, digits=4);
         "Number of line types used" n_linecodes;
-        "Total impedance" round(z_tot, digits=4);
+        "Total impedance (Ω)" round(z_tot, digits=4);
         "R/X ratio" round(rx, digits=4);
         "Length/load" round(len_load, digits=4);
-        "Z/ consumer" round(z_cons, digits=4)
+        "Z/ load" round(z_cons, digits=4)
         #"GIS information"           gis_info;
         #"Max current capacity"      round(max_amps, digits=4);
     ]
     #display(data)
-    println("\"Feeder name\", \"Number of nodes\", \"Number of branches\", \"Number of loads\", \"Number Transformers\", \"Total resistance\", \"Total reactance\", \"Total MVA of transformers\", \"Total length of lines (m)\", \"Number of line types used\", \"Total impedance\", \"R/X ratio\", \"Length/load\", \"Z/ consumer\"")
-    println("$(eng["name"]),$(n_nodes), $(n_lines), $(n_loads), $(n_tfs), $(round(tot_r, digits=4)), $(round(tot_x, digits=4)), $(round(tot_mva_val, digits=4)), $(round(tot_len, digits=4)), $(n_linecodes), $(round(z_tot, digits=4)), $(round(rx, digits=4)), $(round(len_load, digits=4)), $(round(z_cons, digits=4))")
+    #println("\"Feeder name\", \"Number of nodes\", \"Number of branches\", \"Number of loads\", \"Number Transformers\", \"Total resistance\", \"Total reactance\", \"Total MVA of transformers\", \"Total length of lines (m)\", \"Number of line types used\", \"Total impedance\", \"R/X ratio\", \"Length/load\", \"Z/ consumer\"")
+    #println("$(eng["name"]),$(n_nodes), $(n_lines), $(n_loads), $(n_tfs), $(round(tot_r, digits=4)), $(round(tot_x, digits=4)), $(round(tot_mva_val, digits=4)), $(round(tot_len, digits=4)), $(n_linecodes), $(round(z_tot, digits=4)), $(round(rx, digits=4)), $(round(len_load, digits=4)), $(round(z_cons, digits=4))")
     #return data
-    #pretty_table(data; header=["Attributes", "Values"], alignment=[:l, :r])
+    header("Meta Information Table")
+    pretty_table(DataFrame(Attributes=data[:, 1], Values=data[:, 2]); alignment=[:l, :r])
 end
 
 
@@ -1883,6 +1893,8 @@ function bus_phasor(eng::Dict{String, Any}, bus_id::Integer;
                     fig_size=(800, 800),
                     keep_pu::Bool=false,
                    )
+
+    @debug "Creating bus phasor plot for bus ID: $bus_id"
     if isnothing(figure) 
         makie_backend.activate!()
         f = Figure(size=fig_size)
@@ -2146,7 +2158,6 @@ function _is_eng(data::Dict{String, Any})
         error("No data model found in the provided model dictionary.")
     end
 end
-
 
 
 
@@ -2801,6 +2812,321 @@ end
 
 
 
+"""
+    add_degree_to_bus!(data)
+
+Calculates the degree (number of connected branches) for each bus in the network data dictionary and adds it as a "degree" field to the respective bus dictionary.
+
+# Arguments
+- `data`: A dictionary containing PowerModels-style network data, specifically requiring "bus" and "branch" components.
+
+# Effects
+- Modifies `data["bus"]` in-place by adding a "degree" integer value to each bus entry.
+"""
+function add_degree_to_bus!(data)
+    for (_, bus) in data["bus"]
+        bus["degree"] = 0
+        for (_, branch) in data["branch"]
+            if branch["t_bus"] == bus["index"] || branch["f_bus"] == bus["index"]
+                bus["degree"] += 1
+            end
+        end
+    end
+end
+
+
+
+
+"""
+    remove_all_superfluous_buses!(data::Dict)
+
+Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing intermediate buses that have no load, no generation, and a degree of 2 or less (i.e., simple pass-through nodes).
+
+# Arguments
+- `data`: A dictionary containing MATHEMATICAL network data, specifically requiring "bus" and "branch" dictionaries.
+
+# Functionality
+The function performs the following steps:
+1.  **Validation**: Checks that the dictionary is not a multi-network structure.
+2.  **Bus Classification**: Identifies load buses and generation buses. It asserts that load buses have a degree of 1 (implying loads should not be on the main feeder line directly but connected via a spur).
+3.  **Topology Analysis**: Calculates the degree of all buses.
+4.  **Reduction Loop**:
+    - Identifies candidate buses for deletion (non-load, non-gen, degree <= 2).
+    - Iteratively merges branches connected to these buses.
+    - Updates the resistance (`br_r`) and reactance (`br_x`) of the preserved branch by summing the values of the merged branches.
+    - Updates connectivity (from/to bus indices) to bypass the deleted bus.
+    - Deletes the superfluous bus and the redundant branch.
+5.  **Reorientation**: Ensures that the branch connected to the reference bus (slack bus, type 3) is oriented such that `f_bus` is the reference bus.
+
+# Returns
+- The modified `data` dictionary with the topology simplified.
+"""
+function remove_all_superfluous_buses!(data::Dict)
+    @assert !haskey(data, "nw") "Please use `remove_all_intermediate_buses_mn` for multinetwork data dicts like this one"
+    load_buses = ["$(load["load_bus"])" for (_, load) in data["load"]]
+    gen_buses = ["$(gen["gen_bus"])" for (_, gen) in data["gen"]]
+    add_degree_to_bus!(data)
+    for lb in load_buses @assert data["bus"][lb]["degree"] == 1 "Load $lb is on the main cable, add a small connection cable to that load" end
+    to_delete = [b for (b, bus) in data["bus"] if (b ∉ union!(gen_buses, load_buses) && bus["degree"] <= 2)]
+    for db in to_delete
+        data["bus"][db]["adjacent_buses"] = []
+        data["bus"][db]["inout_branches"] = []
+        for (br, branch) in data["branch"]
+            if branch["f_bus"] == parse(Int, db) || branch["t_bus"] == parse(Int, db) 
+                push!(data["bus"][db]["inout_branches"], br)
+                if branch["f_bus"] != parse(Int, db)
+                    push!(data["bus"][db]["adjacent_buses"], "$(branch["f_bus"])")
+                else
+                    push!(data["bus"][db]["adjacent_buses"], "$(branch["t_bus"])")
+                end
+            end
+        end
+    end
+    while !isempty(to_delete)
+        for db in to_delete
+            if any([b ∈ to_delete for b in data["bus"][db]["adjacent_buses"]])
+                deletable_adj_bus = [b for b in data["bus"][db]["adjacent_buses"] if b ∈ to_delete][1]
+                other_adj_bus = [b for b in data["bus"][db]["adjacent_buses"] if b != deletable_adj_bus][1]
+                deletable_adj_bus_branches = data["bus"][deletable_adj_bus]["inout_branches"]
+                delete_branch = first(intersect(Set(data["bus"][db]["inout_branches"]), Set(deletable_adj_bus_branches)))
+                preserve_branch = [br for br in data["bus"][db]["inout_branches"] if br != delete_branch][1]
+                
+                Req = (data["branch"][preserve_branch]["br_r"] .+ data["branch"][delete_branch]["br_r"])
+                Xeq = (data["branch"][preserve_branch]["br_x"] .+ data["branch"][delete_branch]["br_x"]) 
+                data["branch"][preserve_branch]["br_r"] = Req
+                data["branch"][preserve_branch]["br_x"] = Xeq
+                
+                data["branch"][preserve_branch]["f_bus"] = parse(Int64, other_adj_bus)
+                data["branch"][preserve_branch]["t_bus"] = parse(Int64, deletable_adj_bus)
+                data["bus"][deletable_adj_bus]["adjacent_buses"] = filter(x->x!=db, data["bus"][deletable_adj_bus]["adjacent_buses"])
+                push!(data["bus"][deletable_adj_bus]["adjacent_buses"], other_adj_bus)
+                data["bus"][deletable_adj_bus]["inout_branches"] = filter(x->x!=delete_branch, data["bus"][deletable_adj_bus]["inout_branches"])
+                push!(data["bus"][deletable_adj_bus]["inout_branches"], preserve_branch)
+                delete!(data["branch"], delete_branch)
+            else
+                delete_branch = data["bus"][db]["inout_branches"][1]
+                preserve_branch = [br for br in data["bus"][db]["inout_branches"] if br != delete_branch][1]
+                Req = (data["branch"][preserve_branch]["br_r"] .+ data["branch"][delete_branch]["br_r"])
+                Xeq = (data["branch"][preserve_branch]["br_x"] .+ data["branch"][delete_branch]["br_x"]) 
+                data["branch"][preserve_branch]["br_r"] = Req
+                data["branch"][preserve_branch]["br_x"] = Xeq
+                
+                delete!(data["branch"], delete_branch)
+                data["branch"][data["bus"][db]["inout_branches"][2]]["f_bus"] = parse(Int64, data["bus"][db]["adjacent_buses"][1])
+                data["branch"][data["bus"][db]["inout_branches"][2]]["t_bus"] = parse(Int64, data["bus"][db]["adjacent_buses"][2])
+            end
+            delete!(data["bus"], db)
+            to_delete = filter(x->x!=db, to_delete)
+        end
+    end
+    # the lines below make sure that the orientation of the branch at the slack bus is from slack_bus to --> rest of feeder
+    ref_bus = [bus["index"] for (_,bus) in data["bus"] if bus["bus_type"] == 3][1]
+    ref_branch_fr = [b for (b, br) in data["branch"] if br["f_bus"] == ref_bus]
+    if isempty(ref_branch_fr) 
+        ref_branch_to = [b for (b, br) in data["branch"] if br["t_bus"] == ref_bus][1]
+        f_bus = data["branch"][ref_branch_to]["f_bus"]
+        data["branch"][ref_branch_to]["f_bus"] = ref_bus
+        data["branch"][ref_branch_to]["t_bus"] = f_bus
+    end
+    return data
+end
+
+
+# function reduce_network_buses!(data::Dict)
+#     @assert !haskey(data, "nw") "Multinetwork not supported in this function."
+
+#     # 1. Pre-calculate bus connectivity (O(Branches))
+#     # Maps bus_id -> list of branch_ids
+#     bus_to_branches = Dict(b_idx => String[] for b_idx in keys(data["bus"]))
+#     for (br_id, branch) in data["branch"]
+#         push!(bus_to_branches["$(branch["f_bus"])"], br_id)
+#         push!(bus_to_branches["$(branch["t_bus"])"], br_id)
+#     end
+
+#     # 2. Identify Load/Gen buses (Sets for O(1) lookup)
+#     load_bus_ids = Set(["$(load["load_bus"])" for (_, load) in data["load"]])
+#     gen_bus_ids = Set(["$(gen["gen_bus"])" for (_, gen) in data["gen"]])
+    
+#     # 3. Identify candidates for deletion (Degree == 2 and no Load/Gen)
+#     to_delete = String[]
+#     for (b_id, branch_list) in bus_to_branches
+#         degree = length(branch_list)
+        
+#         # Validation: Load buses must be degree 1
+#         if b_id in load_bus_ids
+#             @assert degree == 1 "Load $b_id is on the main cable; degree is $degree"
+#             continue
+#         end
+
+#         if degree == 2 && b_id ∉ gen_bus_ids
+#             push!(to_delete, b_id)
+#         end
+#     end
+
+#     # 4. Reduction Loop
+#     for db in to_delete
+#         # Get the two branches connected to this bus
+#         br_ids = bus_to_branches[db]
+#         if length(br_ids) != 2
+#             continue # Already processed or modified by a neighbor's deletion
+#         end
+
+#         br1_id, br2_id = br_ids[1], br_ids[2]
+#         br1 = data["branch"][br1_id]
+#         br2 = data["branch"][br2_id]
+
+#         # Find the two "far" buses (the ones not being deleted)
+#         # We handle the fact that f_bus or t_bus could be the db
+#         bus_a = "$(br1["f_bus"])" == db ? "$(br1["t_bus"])" : "$(br1["f_bus"])"
+#         bus_b = "$(br2["f_bus"])" == db ? "$(br2["t_bus"])" : "$(br2["f_bus"])"
+
+#         # Merge Impedance into br1 (Preserve br1, delete br2)
+#         br1["br_r"] .+= br2["br_r"]
+#         br1["br_x"] .+= br2["br_x"]
+
+#         # Update br1 connectivity to bypass db
+#         br1["f_bus"] = parse(Int, bus_a)
+#         br1["t_bus"] = parse(Int, bus_b)
+
+#         # Update the connectivity index for bus_b
+#         # bus_b was connected to br2, now it's connected to br1
+#         bus_to_branches[bus_b] = filter(id -> id != br2_id, bus_to_branches[bus_b])
+#         push!(bus_to_branches[bus_b], br1_id)
+
+#         # Remove the bus and the redundant branch
+#         delete!(data["branch"], br2_id)
+#         delete!(data["bus"], db)
+#     end
+
+#     # 5. Reorientation (Slack Bus)
+#     ref_bus = [bus["index"] for (_, bus) in data["bus"] if bus["bus_type"] == 3][1]
+#     for (br_id, br) in data["branch"]
+#         if br["t_bus"] == ref_bus
+#             # Flip orientation
+#             f, t = br["f_bus"], br["t_bus"]
+#             br["f_bus"], br["t_bus"] = t, f
+#             break # Usually only one branch at the slack in radial feeders
+#         end
+#     end
+
+#     return data
+# end
+
+"""
+    reduce_network_buses!(data::Dict)
+
+Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing intermediate buses that have no load, no generation, and a degree of 2 or less (i.e., simple pass-through nodes).
+
+# Arguments
+- `data`: A dictionary containing MATHEMATICAL network data, specifically requiring "bus" and "branch" dictionaries.
+
+# Functionality
+The function performs the following steps:
+1.  **Validation**: Checks that the dictionary is not a multi-network structure.
+2.  **Bus Classification**: Identifies load buses and generation buses. It asserts that load buses have a degree of 1 (implying loads should not be on the main feeder line directly but connected via a spur).
+3.  **Topology Analysis**: Calculates the degree of all buses.
+4.  **Reduction Loop**:
+    - Identifies candidate buses for deletion (non-load, non-gen, degree <= 2).
+    - Iteratively merges branches connected to these buses.
+    - Updates the resistance (`br_r`) and reactance (`br_x`) of the preserved branch by summing the values of the merged branches.
+    - Updates connectivity (from/to bus indices) to bypass the deleted bus.
+    - Deletes the superfluous bus and the redundant branch.
+5.  **Reorientation**: Ensures that the branch connected to the reference bus (slack bus, type 3) is oriented such that `f_bus` is the reference bus.
+
+# Returns
+- The modified `data` dictionary with the topology simplified.
+"""
+function reduce_network_buses!(data::Dict)
+    @assert !haskey(data, "nw") "Multinetwork not supported in this function, apply before performing `make_multinetwork!`."
+
+    # 1. Map Connectivity
+    bus_to_branches = Dict(b => String[] for b in keys(data["bus"]))
+    for (i, br) in data["branch"]
+        push!(bus_to_branches["$(br["f_bus"])"], i)
+        push!(bus_to_branches["$(br["t_bus"])"], i)
+    end
+
+
+    # Identify special_buses (to NOT delete it)
+    special_buses = [bus["index"] for (_, bus) in data["bus"] if bus["bus_type"] != 1]
+    @debug "sepcial_buses (not deletable): " * string(special_buses)
+
+    # Identify buses connected to transformers (to NOT delete these)
+    transformer_buses = Set{String}()
+    if haskey(data, "transformer")
+        for (_, tx) in data["transformer"]
+            push!(transformer_buses, "$(tx["f_bus"])")
+            push!(transformer_buses, "$(tx["t_bus"])")
+        end
+    end
+
+    load_buses = Set(["$(l["load_bus"])" for (_, l) in data["load"]])
+    gen_buses = Set(["$(g["gen_bus"])" for (_, g) in data["gen"]])
+
+    # 2. Find Candidates (Degree 2, no load/gen, NOT a transformer terminal)
+    to_delete = [b for (b, branches) in bus_to_branches if 
+                 length(branches) == 2 &&  # if you want to remove hanging buses (loadless genless leaf buses) use <= 2
+                 b ∉ load_buses && 
+                 b ∉ gen_buses && 
+                 b ∉ transformer_buses &&
+                 b ∉ special_buses
+                 ]
+
+    # 3. Reduction Loop
+    for db in to_delete
+        br_ids = bus_to_branches[db]
+        if length(br_ids) != 2 continue end # Re-check if neighbor already deleted
+
+        id1, id2 = br_ids[1], br_ids[2]
+        br1, br2 = data["branch"][id1], data["branch"][id2]
+
+        # Determine connectivity: bus_a --(br1)-- db --(br2)-- bus_b
+        bus_a = "$(br1["f_bus"])" == db ? "$(br1["t_bus"])" : "$(br1["f_bus"])"
+        bus_b = "$(br2["f_bus"])" == db ? "$(br2["t_bus"])" : "$(br2["f_bus"])"
+
+        # --- SHUNT TRANSFER LOGIC ---
+        # If db had shunts (g_fr, b_fr, etc.) we must sum them into the preserved branch
+        # We assume we are merging br2 into br1
+        for key in ["g_fr", "g_to", "b_fr", "b_to"]
+            # Sum shunts from the deleted bus 'db' into br1
+            if "$(br2["f_bus"])" == db
+                br1["g_to"] .+= br2["g_fr"]
+                br1["b_to"] .+= br2["b_fr"]
+            else
+                br1["g_to"] .+= br2["g_to"]
+                br1["b_to"] .+= br2["b_to"]
+            end
+        end
+
+        # --- IMPEDANCE MERGE ---
+        br1["br_r"] .+= br2["br_r"]
+        br1["br_x"] .+= br2["br_x"]
+
+        # Re-link br1 to bypass db
+        br1["f_bus"] = parse(Int, bus_a)
+        br1["t_bus"] = parse(Int, bus_b)
+
+        # Update connectivity index for bus_b
+        bus_to_branches[bus_b] = filter(id -> id != id2, bus_to_branches[bus_b])
+        push!(bus_to_branches[bus_b], id1)
+
+        delete!(data["branch"], id2)
+        delete!(data["bus"], db)
+    end
+
+    # 5. Reorientation (Slack Bus)
+    ref_bus = [bus["index"] for (_, bus) in data["bus"] if bus["bus_type"] == 3][1]
+    data["settings"]
+    for (br_id, br) in data["branch"]
+        if br["t_bus"] == ref_bus
+            # Flip orientation
+            f, t = br["f_bus"], br["t_bus"]
+            br["f_bus"], br["t_bus"] = t, f
+            break # Usually only one branch at the slack in radial feeders
+        end
+    end
+    return data
+end
 #=
 ░██████████ ░██    ░██ ░█████████    ░██████   ░█████████  ░██████████
 ░██          ░██  ░██  ░██     ░██  ░██   ░██  ░██     ░██     ░██    
@@ -2835,4 +3161,7 @@ export math_bus_details, math_transformers_table, math_transformer_details
 # Re-export network graph functions
 export get_graph_node, get_graph_edge, create_network_graph
 
+
+export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
+export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_buses!
 end # module PMDUtils
