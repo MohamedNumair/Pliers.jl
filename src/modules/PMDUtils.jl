@@ -3046,10 +3046,37 @@ function reduce_network_buses!(data::Dict)
         push!(bus_to_branches["$(br["t_bus"])"], i)
     end
 
-
+    
     # Identify special_buses (to NOT delete it)
-    special_buses = [bus["index"] for (_, bus) in data["bus"] if bus["bus_type"] != 1]
-    @debug "sepcial_buses (not deletable): " * string(special_buses)
+    virt_bus_id = nothing
+    for (b, bus) in data["bus"]
+        if get(bus, "bus_type", 1) == 3
+            virt_bus_id = b
+            @debug "found the virtual reference bus $b"
+            @debug "typeof virt_bus_id: " * string(typeof(virt_bus_id))
+            break
+        end
+    end
+
+    phys_ref_id = nothing
+    if virt_bus_id !== nothing
+        for (_, branch) in data["branch"]
+             # math keys might differ in type (int vs symbol), check carefully or rely on consistency
+             if branch["f_bus"] == parse(Int, virt_bus_id)  
+                  phys_ref_id = string(branch["t_bus"])
+                    @debug "found the physical reference bus $phys_ref_id connected to virtual reference bus $virt_bus_id"
+                  break 
+             end
+        end
+    end
+    special_buses = Set()
+    
+    
+        # Add in order: Virtual -> Physical Ref
+    if virt_bus_id !== nothing push!(special_buses,virt_bus_id) end
+    if phys_ref_id !== nothing push!(special_buses,phys_ref_id) end
+
+    @debug "special_buses (not deletable): " * string(special_buses)
 
     # Identify buses connected to transformers (to NOT delete these)
     transformer_buses = Set{String}()
@@ -3103,8 +3130,11 @@ function reduce_network_buses!(data::Dict)
         br1["br_x"] .+= br2["br_x"]
 
         # Re-link br1 to bypass db
-        br1["f_bus"] = parse(Int, bus_a)
-        br1["t_bus"] = parse(Int, bus_b)
+        if "$(br1["f_bus"])" == db
+            br1["f_bus"] = parse(Int, bus_b)
+        else
+            br1["t_bus"] = parse(Int, bus_b)
+        end
 
         # Update connectivity index for bus_b
         bus_to_branches[bus_b] = filter(id -> id != id2, bus_to_branches[bus_b])
