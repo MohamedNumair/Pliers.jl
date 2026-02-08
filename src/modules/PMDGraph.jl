@@ -449,6 +449,11 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         f_bus = Symbol(branch[:f_bus])
         t_bus = Symbol(branch[:t_bus])
 
+        if endswith(branch[:name], "_2")
+            @debug "Branch $(l) appears to be a reversed transformer branch (ends with '_2'), flipping direction for graph edge"
+            f_bus, t_bus = t_bus, f_bus
+        end
+
         try
             f_vertex = network_graph[f_bus, :bus_id]
             t_vertex = network_graph[t_bus, :bus_id]
@@ -470,14 +475,24 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             f_bus = Symbol(trans[:f_bus])
             t_bus = Symbol(trans[:t_bus])
 
+            if endswith(trans[:name], ".2")
+                @debug "Transformer $(t) appears to be a reversed branch (ends with '.2'), flipping direction for graph edge"
+                f_bus, t_bus = t_bus, f_bus
+            end
+
             try
                 f_vertex = network_graph[f_bus, :bus_id]
                 t_vertex = network_graph[t_bus, :bus_id]
 
-                add_edge!(network_graph, f_vertex, t_vertex, trans)
-
-                push!(get!(adj_list, f_bus, []), t_bus)
-                push!(get!(adj_list, t_bus, []), f_bus)
+                if has_edge(network_graph, f_vertex, t_vertex)
+                    for (k, v) in trans
+                        set_prop!(network_graph, f_vertex, t_vertex, k, v)
+                    end
+                else
+                    add_edge!(network_graph, f_vertex, t_vertex, trans)
+                    push!(get!(adj_list, f_bus, []), t_bus)
+                    push!(get!(adj_list, t_bus, []), f_bus)
+                end
             catch e
                 @warn "Error adding edge for transformer $(t) ($f_bus -> $t_bus): $e"
             end
@@ -736,6 +751,7 @@ function smart_layout(g)
 
     if is_tree
         try
+            @debug "Graph appears to be a tree, using Buchheim layout"
             return GraphMakie.Buchheim()(g)
         catch e
             @warn "Buchheim layout failed, falling back to Spring" exception = e
