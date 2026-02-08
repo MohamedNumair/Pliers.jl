@@ -1569,7 +1569,6 @@ Plots a network map based on the provided engineering data.
 plot_network_map(eng)
 `````
 """
-
 function plot_network_map(
     data::Dict{String,Any};
     show_node_labels=false,
@@ -1636,9 +1635,6 @@ $$ |  $$ |$$    $$ |$$ |      $$ |  $$ |$$ |  $$/ /    $$ |  $$ | __ $$ |$$ |  $
 $$ |__$$ |$$$$$$$$/ $$ \_____ $$ \__$$ |$$ |     /$$$$$$$ |  $$ |/  |$$ |$$ \__$$ |$$ |  $$ |
 $$    $$/ $$       |$$       |$$    $$/ $$ |     $$    $$ |  $$  $$/ $$ |$$    $$/ $$ |  $$ |
 $$$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$/  $$/       $$$$$$$/    $$$$/  $$/  $$$$$$/  $$/   $$/ 
-
-
-
 =#
 
 function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
@@ -1901,7 +1897,7 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
 
             # Determine if branch works as transformer
             is_transformer = false
-            if haskey(edge, :transformer) && edge[:transformer]
+            if haskey(edge, :is_transformer) && edge[:is_transformer]
                 is_transformer = true
             end
 
@@ -1919,9 +1915,7 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                 if haskey(edge, :t_connections)
                     n_phases = length(edge[:t_connections])
                 end
-            end
-
-            if n_phases == 1
+                if n_phases == 1
                 if edge[:t_connections] == [1]
                     edge[:edge_color] = :red
                 elseif edge[:t_connections] == [2]
@@ -1972,6 +1966,9 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                 edge[:edge_color] = :gray
 
             end
+            end
+
+            
         end
     end
 end
