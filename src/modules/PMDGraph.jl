@@ -449,7 +449,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         f_bus = Symbol(branch[:f_bus])
         t_bus = Symbol(branch[:t_bus])
 
-        if endswith(branch[:name], "_2")
+        if startswith(string(get(branch, :name, "")), "_virtual_branch") && endswith(string(get(branch, :name, "")), "_2")
             @debug "Branch $(l) appears to be a reversed transformer branch (ends with '_2'), flipping direction for graph edge"
             f_bus, t_bus = t_bus, f_bus
         end
@@ -475,7 +475,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             f_bus = Symbol(trans[:f_bus])
             t_bus = Symbol(trans[:t_bus])
 
-            if endswith(trans[:name], ".2")
+            if startswith(string(get(trans, :name, "")), "_virtual_transformer") && endswith(string(get(trans, :name, "")), ".2")
                 @debug "Transformer $(t) appears to be a reversed branch (ends with '.2'), flipping direction for graph edge"
                 f_bus, t_bus = t_bus, f_bus
             end
