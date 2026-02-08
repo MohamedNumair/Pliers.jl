@@ -3014,8 +3014,19 @@ end
 
 
 
+"""
+    reduce_network_buses!(data::Dict; remove_leafnodes=true)
 
+Reduces the PowerModelsDistribution network data model by removing redundant buses.
 
+This function sequentially performs network simplification operations:
+1.  Calls `reduce_network_intermediate_buses!` to merge buses with degree of 2 (connecting exactly two branches) that have no other attached components.
+2.  If `remove_leafnodes` is true (default), it calls `reduce_empty_leaf_buses!` to remove dead-end buses with no load or generation, followed by another pass of `reduce_network_intermediate_buses!` to cleanup any new intermediate nodes created by the leaf removal.
+
+# Arguments
+- `data::Dict`: A PowerModelsDistribution network data dictionary.
+- `remove_leafnodes::Bool`: Whether to prune empty leaf nodes (default: `true`).
+"""
 function reduce_network_buses!(data::Dict; remove_leafnodes=true)
     reduce_network_intermediate_buses!(data)
     if remove_leafnodes
