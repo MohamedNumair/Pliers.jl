@@ -3157,6 +3157,117 @@ function reduce_network_buses!(data::Dict)
     end
     return data
 end
+
+"""
+    reduce_empty_leaf_buses!(data::Dict)
+
+Recursively removes leaf buses (degree 1) from a PowerModelsDistribution MATHEMATICAL network dictionary if they have no load, no generation, and are not connected to special components (transformers, slack bus).
+
+# Arguments
+- `data`: A dictionary containing MATHEMATICAL network data.
+
+# Functionality
+1. Identifies critical buses (Load, Gen, Transformer, Slack/Virtual).
+2. Iteratively identifies leaf buses (degree 1) that are not critical.
+3. Removes the leaf bus and its connecting branch.
+4. Checks if the neighbor bus becomes a new empty leaf and repeats the process until no such buses remain.
+
+# Returns
+- The modified `data` dictionary.
+"""
+function reduce_empty_leaf_buses!(data::Dict)
+    # 1. Map Connectivity
+    bus_to_branches = Dict(b => String[] for b in keys(data["bus"]))
+    for (i, br) in data["branch"]
+        if haskey(data["bus"], string(br["f_bus"]))
+            push!(bus_to_branches["$(br["f_bus"])"], i)
+        end
+        if haskey(data["bus"], string(br["t_bus"]))
+             push!(bus_to_branches["$(br["t_bus"])"], i)
+        end
+    end
+
+    # Identify special_buses (Slack/Virtual)
+    virt_bus_id = nothing
+    for (b, bus) in data["bus"]
+        if get(bus, "bus_type", 1) == 3
+            virt_bus_id = b
+            break
+        end
+    end
+
+    phys_ref_id = nothing
+    if virt_bus_id !== nothing
+        for (_, branch) in data["branch"]
+             if branch["f_bus"] == parse(Int, virt_bus_id)  
+                  phys_ref_id = string(branch["t_bus"])
+                  break 
+             end
+        end
+    end
+    
+    special_buses = Set()
+    if virt_bus_id !== nothing push!(special_buses, virt_bus_id) end
+    if phys_ref_id !== nothing push!(special_buses, phys_ref_id) end
+
+    # Identify buses connected to transformers
+    transformer_buses = Set{String}()
+    if haskey(data, "transformer")
+        for (_, tx) in data["transformer"]
+            push!(transformer_buses, "$(tx["f_bus"])")
+            push!(transformer_buses, "$(tx["t_bus"])")
+        end
+    end
+
+    load_buses = Set(["$(l["load_bus"])" for (_, l) in data["load"]])
+    gen_buses = Set(["$(g["gen_bus"])" for (_, g) in data["gen"]])
+
+    # Combine all forbidden buses
+    forbidden_buses = union(load_buses, gen_buses, transformer_buses, special_buses)
+
+    # Initial candidates: Degree 1 and not forbidden
+    candidates = String[]
+    for (b, branches) in bus_to_branches
+        if length(branches) == 1 && b ∉ forbidden_buses
+            push!(candidates, b)
+        end
+    end
+
+    while !isempty(candidates)
+        leaf_bus = pop!(candidates)
+        
+        # Check if already deleted
+        if !haskey(data["bus"], leaf_bus) continue end
+        
+        branches = bus_to_branches[leaf_bus]
+        if isempty(branches) continue end 
+        
+        br_id = branches[1]
+        branch = data["branch"][br_id]
+        
+        # Find neighbor
+        f = "$(branch["f_bus"])"
+        t = "$(branch["t_bus"])"
+        neighbor = (f == leaf_bus) ? t : f
+        
+        # Remove branch and bus
+        delete!(data["branch"], br_id)
+        delete!(data["bus"], leaf_bus)
+        delete!(bus_to_branches, leaf_bus)
+
+        # Update neighbor connectivity
+        if haskey(bus_to_branches, neighbor)
+            filter!(id -> id != br_id, bus_to_branches[neighbor])
+            
+            # Check if neighbor is now a candidate
+            if length(bus_to_branches[neighbor]) == 1 && neighbor ∉ forbidden_buses
+                push!(candidates, neighbor)
+            end
+        end
+    end
+
+    return data
+end
 #=
 ░██████████ ░██    ░██ ░█████████    ░██████   ░█████████  ░██████████
 ░██          ░██  ░██  ░██     ░██  ░██   ░██  ░██     ░██     ░██    
@@ -3193,5 +3304,5 @@ export get_graph_node, get_graph_edge, create_network_graph
 
 
 export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
-export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_buses!
+export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_buses!, reduce_empty_leaf_buses!
 end # module PMDUtils
