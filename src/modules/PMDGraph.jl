@@ -52,15 +52,15 @@ using MetaGraphs
 =#
 
 
-# function _is_eng(graph::MetaDiGraph)
+function _is_eng_graph(graph::AbstractMetaGraph)
 
-#     if haskey(first(graph.eprops).second, :branch_id)
-#         return false
-#     else
-#         return true
-#     end
-#     error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
-# end
+    if haskey(first(graph.eprops).second, :branch_id)
+        return false
+    else
+        return true
+    end
+    error("I don't know if this graph is for a MATHEMATICAL or ENGINEERING model. I usually check if it has `:branch_id` or `:line_id` in the edge properties to tell which one it is.")
+end
 
 
 """
@@ -462,6 +462,28 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         end
     end
 
+    if haskey(math_sym, :transformer)
+        for (t, trans) in math_sym[:transformer]
+            trans[:branch_id] = t
+            trans[:is_transformer] = true
+
+            f_bus = Symbol(trans[:f_bus])
+            t_bus = Symbol(trans[:t_bus])
+
+            try
+                f_vertex = network_graph[f_bus, :bus_id]
+                t_vertex = network_graph[t_bus, :bus_id]
+
+                add_edge!(network_graph, f_vertex, t_vertex, trans)
+
+                push!(get!(adj_list, f_bus, []), t_bus)
+                push!(get!(adj_list, t_bus, []), f_bus)
+            catch e
+                @warn "Error adding edge for transformer $(t) ($f_bus -> $t_bus): $e"
+            end
+        end
+    end
+
     # --- 4. Coordinate Handling ---
     layouting_vector = Vector{Tuple{Float64,Float64}}(undef, nv(network_graph))
     has_coords = fill(false, nv(network_graph))
@@ -622,7 +644,7 @@ impedance = get_graph_edge(G, "line1", "rs")
 ```
 """
 function get_graph_edge(G, edge_id)
-    if _is_eng(G)
+    if _is_eng_graph(G)
         Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)
     else
         Eid = findall(e -> e[:branch_id] == Symbol(edge_id), G.eprops)
@@ -630,7 +652,7 @@ function get_graph_edge(G, edge_id)
     return G.eprops[Eid...]
 end
 function get_graph_edge(G, edge_id, key)
-    if _is_eng(G)
+    if _is_eng_graph(G)
         Eid = findall(e -> e[:line_id] == Symbol(edge_id), G.eprops)
     else
         Eid = findall(e -> e[:branch_id] == Symbol(edge_id), G.eprops)
