@@ -46,9 +46,9 @@ using MetaGraphs
 ░██  ░██░██ ░██             ░██    ░██░██ ░██░██ ░██     ░██ ░██   ░██   ░██   ░██      ░██     ██ ░██   ░██   ░██    ░██ ░██         ░██     ░██ 
 ░██   ░████ ░██             ░██    ░████   ░████  ░██   ░██  ░██    ░██  ░██    ░██      ░██  ░███ ░██    ░██  ░██    ░██ ░██         ░██     ░██ 
 ░██    ░███ ░██████████     ░██    ░███     ░███   ░██████   ░██     ░██ ░██     ░██      ░█████░█ ░██     ░██ ░██    ░██ ░██         ░██     ░██ 
-                                                                                                                                                  
-                                                                                                                                                  
-                                                                                                                                                  
+
+
+
 =#
 
 
@@ -114,28 +114,28 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     # Determine Root Bus (Source Bus)
     ref_bus_name = Symbol("")
     if haskey(eng_sym, :voltage_source) && haskey(eng_sym[:voltage_source], :source)
-         ref_bus_name = Symbol(eng_sym[:voltage_source][:source][:bus])
+        ref_bus_name = Symbol(eng_sym[:voltage_source][:source][:bus])
     end
 
     # Add root first if it exists
     if ref_bus_name != Symbol("") && haskey(eng_sym[:bus], ref_bus_name)
-         bus = eng_sym[:bus][ref_bus_name]
-         bus[:bus_id] = ref_bus_name
-         bus[:loads] = []
-         bus[:shunts] = []
-         bus[:voltage_sources] = []
-         add_vertex!(network_graph, bus)
+        bus = eng_sym[:bus][ref_bus_name]
+        bus[:bus_id] = ref_bus_name
+        bus[:loads] = []
+        bus[:shunts] = []
+        bus[:voltage_sources] = []
+        add_vertex!(network_graph, bus)
     end
 
     for (b, bus) in eng_sym[:bus]
         # Skip if already added
-        if b == ref_bus_name 
-            continue 
+        if b == ref_bus_name
+            continue
         end
 
         # Ensure bus_id is stored consistently
-        bus[:bus_id] = b 
-        
+        bus[:bus_id] = b
+
         # Initialize connection lists
         bus[:loads] = []
         bus[:shunts] = []
@@ -186,10 +186,10 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
             end
         end
     end
-    
+
     # --- 3. Add Edges (Lines & Transformers) ---
     # Used to track connectivity for coordinate inference
-    adj_list = Dict{Symbol, Vector{Symbol}}() 
+    adj_list = Dict{Symbol,Vector{Symbol}}()
 
     # Helper to add edge and track adjacency
     function safe_add_edge!(f_id, t_id, data)
@@ -197,7 +197,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
             f_v = network_graph[f_id, :bus_id]
             t_v = network_graph[t_id, :bus_id]
             add_edge!(network_graph, f_v, t_v, data)
-            
+
             # Track adjacency for coordinate back-propagation
             push!(get!(adj_list, f_id, []), t_id)
             push!(get!(adj_list, t_id, []), f_id)
@@ -209,7 +209,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     for (l, line) in eng_sym[:line]
         line[:line_id] = l
         if haskey(line, :linecode) && haskey(eng_sym, :linecode)
-             line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])]
+            line[:linecodes] = eng_sym[:linecode][Symbol(line[:linecode])]
         end
         safe_add_edge!(Symbol(line[:f_bus]), Symbol(line[:t_bus]), line)
     end
@@ -226,12 +226,12 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     end
 
     # --- 4. Coordinate Handling & Root Fix ---
-    
+
     # Collect existing coordinates
     # We iterate over vertices to respect the graph order (1..nv) for layout vectors
-    layouting_vector = Vector{Tuple{Float64, Float64}}(undef, nv(network_graph))
+    layouting_vector = Vector{Tuple{Float64,Float64}}(undef, nv(network_graph))
     has_coords = fill(false, nv(network_graph))
-    
+
     for v in vertices(network_graph)
         bus_props = props(network_graph, v)
         if haskey(bus_props, :lon) && haskey(bus_props, :lat)
@@ -242,7 +242,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     # Fix missing coordinates for root buses (or any bus) by looking at neighbors
     # This is a simple 1-hop look-ahead. Can be expanded to BFS if needed.
-    
+
     # Identify likely root buses (those with voltage sources)
     root_candidates = []
     if haskey(eng_sym, :voltage_source)
@@ -259,7 +259,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
                 v_sym = get_prop(network_graph, v, :bus_id)
                 neighbors = get(adj_list, v_sym, [])
                 for neighbor_id in neighbors
-                   try
+                    try
                         v_neighbor = network_graph[neighbor_id, :bus_id]
                         if has_coords[v_neighbor]
                             layouting_vector[v] = layouting_vector[v_neighbor]
@@ -267,9 +267,10 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
                             # Update the property in the graph as well for consistency
                             set_prop!(network_graph, v, :lon, layouting_vector[v_neighbor][1])
                             set_prop!(network_graph, v, :lat, layouting_vector[v_neighbor][2])
-                            break 
+                            break
                         end
-                   catch; end
+                    catch
+                    end
                 end
             end
         end
@@ -277,7 +278,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
 
     # Layout function construction
     if sum(has_coords) > 0 # At least some coordinates exist
-        GraphLayout = function(g) 
+        GraphLayout = function (g)
             final_layout = []
             for i in 1:nv(g)
                 if has_coords[i]
@@ -289,7 +290,7 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
             return final_layout
         end
         if sum(has_coords) < nv(network_graph)
-             @warn "Only $(sum(has_coords)) of $(nv(network_graph)) buses have coordinates. Use fallback for missing ones?"
+            @warn "Only $(sum(has_coords)) of $(nv(network_graph)) buses have coordinates. Use fallback for missing ones?"
         end
     else
         @warn "No coordinates found in ENGINEERING model. Using fallback layout."
@@ -321,10 +322,10 @@ A tuple containing:
 function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     math_sym = convert_keys_to_symbols(deepcopy(math))
     network_graph = MetaDiGraph()
-    
+
     # --- 1. Add Vertices (Buses) ---
     # Prioritize adding Root/Virtual buses first for layout algorithms (Buchheim)
-    
+
     # 1. Find physical reference bus (type 3)
     phys_ref_id = nothing
     for (b, bus) in math_sym[:bus]
@@ -338,16 +339,16 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     virt_bus_id = nothing
     if phys_ref_id !== nothing
         for (_, branch) in math_sym[:branch]
-             # math keys might differ in type (int vs symbol), check carefully or rely on consistency
-             if branch[:t_bus] == phys_ref_id
-                  virt_bus_id = branch[:f_bus]
-                  break 
-             end
+            # math keys might differ in type (int vs symbol), check carefully or rely on consistency
+            if branch[:t_bus] == phys_ref_id
+                virt_bus_id = branch[:f_bus]
+                break
+            end
         end
     end
-    
+
     priority_buses = Set()
-    
+
     # helper to add bus
     function add_bus_node!(b_id)
         if haskey(math_sym[:bus], b_id) && !(b_id in priority_buses)
@@ -362,8 +363,12 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     end
 
     # Add in order: Virtual -> Physical Ref
-    if virt_bus_id !== nothing add_bus_node!(virt_bus_id) end
-    if phys_ref_id !== nothing add_bus_node!(phys_ref_id) end
+    if virt_bus_id !== nothing
+        add_bus_node!(virt_bus_id)
+    end
+    if phys_ref_id !== nothing
+        add_bus_node!(phys_ref_id)
+    end
 
     for (b, bus) in math_sym[:bus]
         if !(b in priority_buses)
@@ -384,11 +389,14 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
         for (_, load) in math_sym[:load]
             try
                 bus_id = Symbol(load[:load_bus]) # math model often uses ints, ensure key match
-                
+
                 # Robust lookup: try direct, then Symbol, then Int
                 v_idx = nothing
-                try v_idx = network_graph[bus_id, :bus_id] catch; end
-                
+                try
+                    v_idx = network_graph[bus_id, :bus_id]
+                catch
+                end
+
                 if !isnothing(v_idx)
                     push!(network_graph.vprops[v_idx][:loads], load)
                 end
@@ -403,11 +411,15 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             try
                 bus_id = Symbol(shunt[:shunt_bus])
                 v_idx = nothing
-                try v_idx = network_graph[bus_id, :bus_id] catch; end
-                if !isnothing(v_idx)
-                     push!(network_graph.vprops[v_idx][:shunts], shunt)
+                try
+                    v_idx = network_graph[bus_id, :bus_id]
+                catch
                 end
-            catch; end
+                if !isnothing(v_idx)
+                    push!(network_graph.vprops[v_idx][:shunts], shunt)
+                end
+            catch
+            end
         end
     end
 
@@ -416,29 +428,33 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
             try
                 bus_id = Symbol(gen[:gen_bus])
                 v_idx = nothing
-                try v_idx = network_graph[bus_id, :bus_id] catch; end
-                if !isnothing(v_idx)
-                     push!(network_graph.vprops[v_idx][:gens], gen)
+                try
+                    v_idx = network_graph[bus_id, :bus_id]
+                catch
                 end
-            catch; end
+                if !isnothing(v_idx)
+                    push!(network_graph.vprops[v_idx][:gens], gen)
+                end
+            catch
+            end
         end
     end
 
     # --- 3. Add Edges (Branches) ---
-    adj_list = Dict{Any, Vector{Any}}()
+    adj_list = Dict{Any,Vector{Any}}()
 
     for (l, branch) in math_sym[:branch]
         branch[:branch_id] = l
-        
+
         f_bus = Symbol(branch[:f_bus])
         t_bus = Symbol(branch[:t_bus])
 
         try
             f_vertex = network_graph[f_bus, :bus_id]
             t_vertex = network_graph[t_bus, :bus_id]
-            
+
             add_edge!(network_graph, f_vertex, t_vertex, branch)
-            
+
             push!(get!(adj_list, f_bus, []), t_bus)
             push!(get!(adj_list, t_bus, []), f_bus)
         catch e
@@ -447,7 +463,7 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
     end
 
     # --- 4. Coordinate Handling ---
-    layouting_vector = Vector{Tuple{Float64, Float64}}(undef, nv(network_graph))
+    layouting_vector = Vector{Tuple{Float64,Float64}}(undef, nv(network_graph))
     has_coords = fill(false, nv(network_graph))
 
     for v in vertices(network_graph)
@@ -460,13 +476,13 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
 
     # Propagate coordinates to any node missing them from neighbors
     # (Covers RefBus -> VirtualGenBus and similar cases)
-    for _ in 1:2 
+    for _ in 1:2
         for v in vertices(network_graph)
             if !has_coords[v]
                 # Check neighbors
                 bus_id = get_prop(network_graph, v, :bus_id)
                 neighbors = get(adj_list, bus_id, [])
-                
+
                 for n_id in neighbors
                     try
                         n_v = network_graph[n_id, :bus_id]
@@ -477,14 +493,15 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
                             set_prop!(network_graph, v, :lat, layouting_vector[n_v][2])
                             break
                         end
-                    catch; end
+                    catch
+                    end
                 end
             end
         end
     end
 
     if sum(has_coords) > 0
-        GraphLayout = function(g)
+        GraphLayout = function (g)
             final_layout = []
             for i in 1:nv(g)
                 if has_coords[i]
@@ -632,7 +649,7 @@ end
 ░██  ░██░██ ░██             ░██    ░██░██ ░██░██ ░██     ░██ ░██   ░██   ░██   ░██      ░██         ░██         ░██     ░██     ░██    
 ░██   ░████ ░██             ░██    ░████   ░████  ░██   ░██  ░██    ░██  ░██    ░██     ░██         ░██          ░██   ░██      ░██    
 ░██    ░███ ░██████████     ░██    ░███     ░███   ░██████   ░██     ░██ ░██     ░██    ░██         ░██████████   ░██████       ░██    
-                                                                                                                                                                                                                                                                                                                                                                                                                     
+
 =#
 
 
@@ -685,11 +702,11 @@ If `Buchheim` fails or if the graph is not a tree, it falls back to `GraphMakie.
 """
 function smart_layout(g)
     is_tree = false
-    try 
+    try
         if nv(g) > 0 && ne(g) == nv(g) - 1
-             if is_weakly_connected(g)
-                 is_tree = true
-             end
+            if is_weakly_connected(g)
+                is_tree = true
+            end
         end
     catch e
         @warn "Tree check failed: $e"
@@ -699,7 +716,7 @@ function smart_layout(g)
         try
             return GraphMakie.Buchheim()(g)
         catch e
-            @warn "Buchheim layout failed, falling back to Spring" exception=e
+            @warn "Buchheim layout failed, falling back to Spring" exception = e
             return GraphMakie.Spring()(g)
         end
     else
@@ -1208,28 +1225,21 @@ function plot_network_tree(
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
 
     # FORCED NODE FORMATTING:
-    # 1. Identify the sourcebus
-    if _is_eng(data)
-        _decorate_nodes!(network_graph, data)
-        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
-        _decorate_edges(network_graph, data)
-        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = true
-        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
-        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
-        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
-    else
-        node_color = :black
-        node_marker = :circle
-        node_size = 10
-        edge_color = :black
-        arrow_show = false
-        arrow_marker = '➤'
-        arrow_size = 12
-        arrow_shift = 0.5
-    end
+    _decorate_nodes!(network_graph, data)
+    node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+
+    _decorate_edges!(network_graph, data)
+    edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+    # Calculating arrow_show as true (globally enabled) but controlling visibility via arrow_size=0
+    # This avoids "non-boolean (Vector{Bool}) used in boolean context" error in Makie
+    arrow_show = true
+    # arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+    arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
     # plot and return the network 
     return network_graph_plot(
         network_graph;
@@ -1295,28 +1305,21 @@ function plot_network_tree!(
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
 
     # FORCED NODE FORMATTING:
-    # 1. Identify the sourcebus
-    if _is_eng(data)
-        _decorate_nodes!(network_graph, data)
-        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
-        _decorate_edges(network_graph, data)
-        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = true
-        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
-        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
-        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
-    else
-        node_color = :black
-        node_marker = :circle
-        node_size = 10
-        edge_color = :black
-        arrow_show = false
-        arrow_marker = '➤'
-        arrow_size = 12
-        arrow_shift = 0.5
-    end
+    _decorate_nodes!(network_graph, data)
+    node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+
+    _decorate_edges!(network_graph, data)
+    edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+    # Calculating arrow_show as true (globally enabled) but controlling visibility via arrow_size=0
+    # This avoids "non-boolean (Vector{Bool}) used in boolean context" error in Makie
+    arrow_show = true
+    # arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+    arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
     # plot and return the network 
     return network_graph_plot!(
         ax,
@@ -1404,27 +1407,21 @@ function plot_network_coords(
 
 
     # FORCED NODE FORMATTING:   
-    if _is_eng(data)
-        _decorate_nodes!(network_graph, data)
-        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
-        _decorate_edges(network_graph, data)
-        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-        arrow_show = true
-        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
-        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
-        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
-    else
-        node_color = :black
-        node_marker = :circle
-        node_size = 10
-        edge_color = :black
-        arrow_show = false
-        arrow_marker = '➤'
-        arrow_size = 12
-        arrow_shift = 0.5
-    end
+    _decorate_nodes!(network_graph, data)
+    node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+
+    _decorate_edges!(network_graph, data)
+    edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+    # Calculating arrow_show as true (globally enabled) but controlling visibility via arrow_size=0
+    # This avoids "non-boolean (Vector{Bool}) used in boolean context" error in Makie
+    arrow_show = true
+    # arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+    arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
 
     # Plot the graph
     return network_graph_plot(
@@ -1466,8 +1463,13 @@ function plot_network_coords!(
     node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
     node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
 
-    _decorate_edges(network_graph, data)
+    _decorate_edges!(network_graph, data)
     edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+    arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+    arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
+
     # Plot the graph
     return network_graph_plot!(
         network_graph;
@@ -1479,6 +1481,10 @@ function plot_network_coords!(
         show_edge_labels=show_edge_labels,
         elabels=elabels,
         edge_color=edge_color,
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
         kwargs...
     )
 end
@@ -1546,27 +1552,21 @@ function plot_network_map(
         return plot_network_coords(data, show_node_labels=show_node_labels, show_edge_labels=show_edge_labels, kwargs...)
     else
         @info "Plotting network map with coordinates on the map -- it is your responsibility to ensure the coordinates are at the correct place"
-        if _is_eng(data)
-            _decorate_nodes!(network_graph, data)
-            node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
-            node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
-            node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
-            _decorate_edges(network_graph, data)
-            edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-            arrow_show = true
-            arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
-            arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
-            arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
-        else
-            node_color = :black
-            node_marker = :circle
-            node_size = 10
-            edge_color = :black
-            arrow_show = false
-            arrow_marker = '➤'
-            arrow_size = 12
-            arrow_shift = 0.5
-        end
+        _decorate_nodes!(network_graph, data)
+        node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
+        node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+        node_size = [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)]
+
+        _decorate_edges!(network_graph, data)
+        edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+        # Calculating arrow_show as true (globally enabled) but controlling visibility via arrow_size=0
+        # This avoids "non-boolean (Vector{Bool}) used in boolean context" error in Makie
+        arrow_show = true
+        # arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+
+        arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+        arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+        arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
         return network_graph_map_plot(
             network_graph, GraphLayout;
             nlabels=nlabels,
@@ -1683,16 +1683,99 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                     node[:node_marker] = :circle
                     node[:marker_size] = 1
                 end
-            end    
+            end
         end
 
     else
-        # TODO: MATH related formatting
+        # MATH related formatting
+        for (_, node) in network_graph.vprops
+            # Reference Bus (Type 3)
+            # Check if bus_type is 3 (Swing/Slack)
+            is_ref = false
+            if haskey(node, :bus_type) && node[:bus_type] == 3
+                is_ref = true
+            end
+
+            if is_ref
+                node[:node_color] = :orange
+                node[:node_marker] = :star5
+                node[:marker_size] = 25
+            else
+                if !isempty(node[:loads])
+                    if length(node[:loads]) == 1
+                        if length(node[:loads][1][:connections]) == 1
+                            if node[:loads][1][:connections] == [1]
+                                node[:node_color] = :red
+                                node[:node_marker] = :dtriangle  # `↓`
+                            elseif node[:loads][1][:connections] == [2]
+                                node[:node_color] = :green
+                                node[:node_marker] = :dtriangle  # `↓`
+                            elseif node[:loads][1][:connections] == [3]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :dtriangle  # `↓`
+                            elseif node[:loads][1][:connections] == [4]
+                                node[:node_color] = :black
+                                node[:node_marker] = :dtriangle  # `↓`
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        elseif length(node[:loads][1][:connections]) == 2
+                            if node[:loads][1][:connections] == [1, 4]
+                                node[:node_color] = :red
+                                node[:node_marker] = :utriangle  # `↕`
+                            elseif node[:loads][1][:connections] == [2, 4]
+                                node[:node_color] = :green
+                                node[:node_marker] = :utriangle  # `↕`
+                            elseif node[:loads][1][:connections] == [3, 4]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :utriangle  # `↕`
+                            elseif node[:loads][1][:connections] == [1, 2]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :rtriangle  # `↔`
+                            elseif node[:loads][1][:connections] == [2, 3]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :rtriangle  # `↔`
+                            elseif node[:loads][1][:connections] == [3, 1]
+                                node[:node_color] = :blue
+                                node[:node_marker] = :rtriangle  # `↔`
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        elseif length(node[:loads][1][:connections]) == 3
+                            if node[:loads][1][:connections] == [1, 2, 3]
+                                node[:node_color] = :purple
+                                node[:node_marker] = :pentagon
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        elseif length(node[:loads][1][:connections]) == 4
+                            if node[:loads][1][:connections] == [1, 2, 3, 4]
+                                node[:node_color] = :purple
+                                node[:node_marker] = :pentagon
+                            else
+                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            end
+                        else
+                            error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                        end
+                        node[:marker_size] = 10
+                    else
+                        node[:node_color] = :purple
+                        node[:node_marker] = :xcross
+                        node[:marker_size] = 10
+                    end
+                else
+                    node[:node_color] = :gray
+                    node[:node_marker] = :circle
+                    node[:marker_size] = 1
+                end
+            end
+        end
     end
 end
 
 
-function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
+function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
     if _is_eng(data)
         for (_, edge) in network_graph.eprops
             # Set default arrow properties
@@ -1707,7 +1790,7 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
                 edge[:arrow_marker] = 'Ꝏ'
                 edge[:arrow_size] = 20
                 edge[:arrow_shift] = 0.5
-                
+
             else
 
                 if !isempty(edge[:t_connections])
@@ -1731,11 +1814,11 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
                         elseif edge[:t_connections] == [3, 4] || edge[:t_connections] == [4, 3]
                             edge[:edge_color] = :blue
                         elseif edge[:t_connections] == [1, 2] || edge[:t_connections] == [2, 1]
-                            edge[:edge_color] = :blue
+                            edge[:edge_color] = :cyan
                         elseif edge[:t_connections] == [2, 3] || edge[:t_connections] == [3, 2]
-                            edge[:edge_color] = :blue
+                            edge[:edge_color] = :orange
                         elseif edge[:t_connections] == [3, 1] || edge[:t_connections] == [1, 3]
-                            edge[:edge_color] = :blue
+                            edge[:edge_color] = :magenta
                         else
                             error("Unexpected connections: $(edge[:t_connections])")
                         end
@@ -1752,7 +1835,7 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
                             error("Unexpected connections: $(edge[:t_connections])")
                         end
                     elseif length(edge[:t_connections]) == 4
-                        if length(edge[:t_connections]) == 4 
+                        if length(edge[:t_connections]) == 4
                             edge[:edge_color] = :purple
                         else
                             error("Unexpected connections: $(edge[:t_connections])")
@@ -1761,7 +1844,7 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
                         edge[:edge_color] = :gray
                     end
                 else
-                    edge[:edge_color] = :black
+                    edge[:edge_color] = :gray
 
                 end
             end
@@ -1770,75 +1853,157 @@ function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any})
 
         end
     else
-        #TODO: MATH related formatting
-    end
-end
-function _decorate_edges(network_graph::MetaDiGraph, data::Dict{String,Any}, phase::String)
-    if _is_eng(data)
+        # MATH related formatting
         for (_, edge) in network_graph.eprops
-            if !haskey(edge, :t_connections) # I am suing this to determine that it is a transformer not a line
-                edge[:edge_color] = :gold
-            else
-                if !isempty(edge[:t_connections])
-                    if length(edge[:t_connections]) == 1
-                        if edge[:t_connections] == [1]
-                            edge[:edge_color] = :red
-                        elseif edge[:t_connections] == [2]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [3]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [4]
-                            edge[:edge_color] = :white
-                        else
-                            error("Unexpected connections: $(edge[:t_connections])")
-                        end
-                    elseif length(edge[:t_connections]) == 2
-                        if edge[:t_connections] == [1, 4]
-                            edge[:edge_color] = :red
-                        elseif edge[:t_connections] == [2, 4]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [3, 4]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [1, 2]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [2, 3]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [3, 1]
-                            edge[:edge_color] = :white
-                        else
-                            error("Unexpected connections: $(edge[:t_connections])")
-                        end
-                    elseif length(edge[:t_connections]) == 3
-                        if edge[:t_connections] == [1, 2, 3]
-                            edge[:edge_color] = :red
-                        elseif edge[:t_connections] == [1, 2, 4]
-                            edge[:edge_color] = :red
-                        elseif edge[:t_connections] == [2, 3, 4]
-                            edge[:edge_color] = :white
-                        elseif edge[:t_connections] == [3, 1, 4]
-                            edge[:edge_color] = :red
-                        else
-                            error("Unexpected connections: $(edge[:t_connections])")
-                        end
-                    elseif length(edge[:t_connections]) == 4
-                        if edge[:t_connections] == [1, 2, 3, 4]
-                            edge[:edge_color] = :red
-                        else
-                            error("Unexpected connections: $(edge[:t_connections])")
-                        end
-                    else
-                        edge[:edge_color] = :white
-                    end
-                else
-                    edge[:edge_color] = :white
+            # Set default arrow properties
+            edge[:arrow_show] = false
+            edge[:arrow_marker] = '⠀'
+            edge[:arrow_size] = 0
+            edge[:arrow_shift] = 0.5
 
+            # Determine if branch works as transformer
+            is_transformer = false
+            if haskey(edge, :transformer) && edge[:transformer]
+                is_transformer = true
+            end
+
+            # Assume gold for transformers (similar to lines without t_connections in ENG logic)
+            if is_transformer
+                edge[:edge_color] = :gold
+                edge[:arrow_show] = true
+                edge[:arrow_marker] = 'Ꝏ'
+                edge[:arrow_size] = 20
+                edge[:arrow_shift] = 0.5
+            else
+                # Colored depending on phases (size of matrix)
+                edge[:edge_color] = :black
+                n_phases = 1
+                if haskey(edge, :t_connections)
+                    n_phases = length(edge[:t_connections])
                 end
             end
+
+            if n_phases == 1
+                if edge[:t_connections] == [1]
+                    edge[:edge_color] = :red
+                elseif edge[:t_connections] == [2]
+                    edge[:edge_color] = :green
+                elseif edge[:t_connections] == [3]
+                    edge[:edge_color] = :blue
+                elseif edge[:t_connections] == [4]
+                    edge[:edge_color] = :black
+                else
+                    error("Unexpected connections: $(edge[:t_connections])")
+                end
+            elseif n_phases == 2
+                if edge[:t_connections] == [1, 4] || edge[:t_connections] == [4, 1]
+                    edge[:edge_color] = :red
+                elseif edge[:t_connections] == [2, 4] || edge[:t_connections] == [4, 2]
+                    edge[:edge_color] = :green
+                elseif edge[:t_connections] == [3, 4] || edge[:t_connections] == [4, 3]
+                    edge[:edge_color] = :blue
+                elseif edge[:t_connections] == [1, 2] || edge[:t_connections] == [2, 1]
+                    edge[:edge_color] = :cyan
+                elseif edge[:t_connections] == [2, 3] || edge[:t_connections] == [3, 2]
+                    edge[:edge_color] = :orange
+                elseif edge[:t_connections] == [3, 1] || edge[:t_connections] == [1, 3]
+                    edge[:edge_color] = :magenta
+                else
+                    error("Unexpected connections: $(edge[:t_connections])")
+                end
+            elseif n_phases == 3
+                if edge[:t_connections] == [1, 2, 3]
+                    edge[:edge_color] = :purple
+                elseif edge[:t_connections] == [1, 2, 4]
+                    edge[:edge_color] = :blue
+                elseif edge[:t_connections] == [2, 3, 4]
+                    edge[:edge_color] = :blue
+                elseif edge[:t_connections] == [3, 1, 4]
+                    edge[:edge_color] = :blue
+                else
+                    error("Unexpected connections: $(edge[:t_connections])")
+                end
+            elseif n_phases == 4
+                if length(edge[:t_connections]) == 4
+                    edge[:edge_color] = :purple
+                else
+                    error("Unexpected connections: $(edge[:t_connections])")
+                end
+            else
+                @warn "Unexpected number of phases: $n_phases for edge with connections $(get(edge, :t_connections, "N/A")), defaulting to gray"
+                edge[:edge_color] = :gray
+
+            end
         end
-    else
-        #TODO: MATH related formatting
     end
 end
+
+# function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any}, phase::String)
+#     if _is_eng(data)
+#         for (_, edge) in network_graph.eprops
+#             if !haskey(edge, :t_connections) # I am suing this to determine that it is a transformer not a line
+#                 edge[:edge_color] = :gold
+#             else
+#                 if !isempty(edge[:t_connections])
+#                     if length(edge[:t_connections]) == 1
+#                         if edge[:t_connections] == [1]
+#                             edge[:edge_color] = :red
+#                         elseif edge[:t_connections] == [2]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [3]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [4]
+#                             edge[:edge_color] = :white
+#                         else
+#                             error("Unexpected connections: $(edge[:t_connections])")
+#                         end
+#                     elseif length(edge[:t_connections]) == 2
+#                         if edge[:t_connections] == [1, 4]
+#                             edge[:edge_color] = :red
+#                         elseif edge[:t_connections] == [2, 4]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [3, 4]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [1, 2]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [2, 3]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [3, 1]
+#                             edge[:edge_color] = :white
+#                         else
+#                             error("Unexpected connections: $(edge[:t_connections])")
+#                         end
+#                     elseif length(edge[:t_connections]) == 3
+#                         if edge[:t_connections] == [1, 2, 3]
+#                             edge[:edge_color] = :red
+#                         elseif edge[:t_connections] == [1, 2, 4]
+#                             edge[:edge_color] = :red
+#                         elseif edge[:t_connections] == [2, 3, 4]
+#                             edge[:edge_color] = :white
+#                         elseif edge[:t_connections] == [3, 1, 4]
+#                             edge[:edge_color] = :red
+#                         else
+#                             error("Unexpected connections: $(edge[:t_connections])")
+#                         end
+#                     elseif length(edge[:t_connections]) == 4
+#                         if edge[:t_connections] == [1, 2, 3, 4]
+#                             edge[:edge_color] = :red
+#                         else
+#                             error("Unexpected connections: $(edge[:t_connections])")
+#                         end
+#                     else
+#                         edge[:edge_color] = :white
+#                     end
+#                 else
+#                     edge[:edge_color] = :white
+
+#                 end
+#             end
+#         end
+#     else
+#         #TODO: MATH related formatting
+#     end
+# end
 
 #=
 __                  __                  __                  __    __                            __  __  __                     
