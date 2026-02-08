@@ -2932,7 +2932,7 @@ function remove_all_superfluous_buses!(data::Dict)
 end
 
 
-# function reduce_network_buses!(data::Dict)
+# function reduce_network_intermediate_buses(data::Dict)
 #     @assert !haskey(data, "nw") "Multinetwork not supported in this function."
 
 #     # 1. Pre-calculate bus connectivity (O(Branches))
@@ -3012,8 +3012,27 @@ end
 #     return data
 # end
 
+
+
+
+
+function reduce_network_buses!(data::Dict; remove_leafnodes=true)
+    reduce_network_intermediate_buses(data)
+    if remove_leafnodes
+        reduce_empty_leaf_buses!(data)
+    end
+end
+
+
+
+
+
+
+
+
+
 """
-    reduce_network_buses!(data::Dict)
+    reduce_network_intermediate_buses(data::Dict)
 
 Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing intermediate buses that have no load, no generation, and a degree of 2 or less (i.e., simple pass-through nodes).
 
@@ -3023,10 +3042,10 @@ Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing
 # Functionality
 The function performs the following steps:
 1.  **Validation**: Checks that the dictionary is not a multi-network structure.
-2.  **Bus Classification**: Identifies load buses and generation buses. It asserts that load buses have a degree of 1 (implying loads should not be on the main feeder line directly but connected via a spur).
+2.  **Bus Classification**: Identifies load buses, generation buses, transformer buses and other special buses.
 3.  **Topology Analysis**: Calculates the degree of all buses.
 4.  **Reduction Loop**:
-    - Identifies candidate buses for deletion (non-load, non-gen, degree <= 2).
+    - Identifies candidate buses for deletion (non-load, non-gen, degree == 2).
     - Iteratively merges branches connected to these buses.
     - Updates the resistance (`br_r`) and reactance (`br_x`) of the preserved branch by summing the values of the merged branches.
     - Updates connectivity (from/to bus indices) to bypass the deleted bus.
@@ -3036,14 +3055,18 @@ The function performs the following steps:
 # Returns
 - The modified `data` dictionary with the topology simplified.
 """
-function reduce_network_buses!(data::Dict)
+function reduce_network_intermediate_buses(data::Dict)
     @assert !haskey(data, "nw") "Multinetwork not supported in this function, apply before performing `make_multinetwork!`."
 
     # 1. Map Connectivity
     bus_to_branches = Dict(b => String[] for b in keys(data["bus"]))
     for (i, br) in data["branch"]
-        push!(bus_to_branches["$(br["f_bus"])"], i)
-        push!(bus_to_branches["$(br["t_bus"])"], i)
+        if haskey(data["bus"], string(br["f_bus"]))
+            push!(bus_to_branches["$(br["f_bus"])"], i)
+        end
+        if haskey(data["bus"], string(br["t_bus"]))
+            push!(bus_to_branches["$(br["t_bus"])"], i)
+        end
     end
 
     
@@ -3091,16 +3114,20 @@ function reduce_network_buses!(data::Dict)
     gen_buses = Set(["$(g["gen_bus"])" for (_, g) in data["gen"]])
 
     # 2. Find Candidates (Degree 2, no load/gen, NOT a transformer terminal)
-    to_delete = [b for (b, branches) in bus_to_branches if 
-                 length(branches) == 2 &&  # if you want to remove hanging buses (loadless genless leaf buses) use <= 2
-                 b ∉ load_buses && 
-                 b ∉ gen_buses && 
-                 b ∉ transformer_buses &&
-                 b ∉ special_buses
-                 ]
+    forbidden_buses = union(load_buses, gen_buses, transformer_buses, special_buses)
+    
+    candidates = String[]
+    for (b, branches) in bus_to_branches
+        if length(branches) == 2 && b ∉ forbidden_buses
+            push!(candidates, b)
+        end
+    end
 
     # 3. Reduction Loop
-    for db in to_delete
+    for db in candidates
+        # Re-check existence (though static list usually safe for degree 2 reductions)
+        if !haskey(bus_to_branches, db) continue end
+        
         br_ids = bus_to_branches[db]
         if length(br_ids) != 2 continue end # Re-check if neighbor already deleted
 
@@ -3139,9 +3166,17 @@ function reduce_network_buses!(data::Dict)
         # Update connectivity index for bus_b
         bus_to_branches[bus_b] = filter(id -> id != id2, bus_to_branches[bus_b])
         push!(bus_to_branches[bus_b], id1)
+        unique!(bus_to_branches[bus_b]) # Safety for parallel edges
 
+        # Cleanup
         delete!(data["branch"], id2)
         delete!(data["bus"], db)
+        delete!(bus_to_branches, db)
+
+        # Note: We do not need to check bus_b for new candidacy because merging edges
+        # maintains the degree of the neighbor (2 edges -> 1 edge? No. 
+        # bus_b was connected to db (via br2). Now connected to bus_a (via br1).
+        # Degree count (number of branches) remains constant).
     end
 
     # 5. Reorientation (Slack Bus)
@@ -3265,7 +3300,7 @@ function reduce_empty_leaf_buses!(data::Dict)
             end
         end
     end
-
+    reduce_network_intermediate_buses(data)
     return data
 end
 #=
@@ -3304,5 +3339,5 @@ export get_graph_node, get_graph_edge, create_network_graph
 
 
 export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
-export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_buses!, reduce_empty_leaf_buses!
+export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses, reduce_empty_leaf_buses!
 end # module PMDUtils
