@@ -3140,27 +3140,65 @@ function reduce_network_intermediate_buses!(data::Dict)
         bus_b = "$(br2["f_bus"])" == db ? "$(br2["t_bus"])" : "$(br2["f_bus"])"
 
         @debug "Merging bus $db between bus $bus_a and bus $bus_b by merging branches $id1 and $id2"
-        # --- SHUNT TRANSFER LOGIC ---
-        # If db had shunts (g_fr, b_fr, etc.) we must sum them into the preserved branch
-        # We assume we are merging br2 into br1
-        for key in ["g_fr", "g_to", "b_fr", "b_to"]
-            # Sum shunts from the deleted bus 'db' into br1
-            if "$(br2["f_bus"])" == db
-           
 
-                br1["g_to"] .+= br2["g_fr"]
-                br1["b_to"] .+= br2["b_fr"]
-            else
-                @debug br1["g_to"]
-                @debug br2["g_fr"]
-                br1["g_to"] .+= br2["g_to"]
-                br1["b_to"] .+= br2["b_to"]
-            end
+        # --- PHASE ALIGNMENT & PREPARATION ---
+        conns1 = br1["f_connections"]
+        conns2 = br2["f_connections"]
+        common = intersect(conns1, conns2)
+        sort!(common)
+
+        if isempty(common)
+             @warn "No common phases between branches $(id1) and $(id2) at bus $(db). Skipping merge."
+             continue
+        end
+        
+        idx1 = [findfirst(isequal(c), conns1) for c in common]
+        idx2 = [findfirst(isequal(c), conns2) for c in common]
+
+        # --- SHUNT TRANSFER LOGIC ---
+        # Resize br1 shunts to common phases
+        br1["g_fr"] = br1["g_fr"][idx1, idx1]
+        br1["b_fr"] = br1["b_fr"][idx1, idx1]
+        br1["g_to"] = br1["g_to"][idx1, idx1]
+        br1["b_to"] = br1["b_to"][idx1, idx1]
+        
+        # Get relevant shunts from br2 (at db) to add to br1 (at db)
+        if "$(br2["f_bus"])" == db
+            g_add = br2["g_fr"][idx2, idx2]
+            b_add = br2["b_fr"][idx2, idx2]
+        else
+            g_add = br2["g_to"][idx2, idx2]
+            b_add = br2["b_to"][idx2, idx2]
+        end
+
+        # Add shunts to the end of br1 connected to db
+        if "$(br1["f_bus"])" == db
+            br1["g_fr"] .+= g_add
+            br1["b_fr"] .+= b_add
+        else
+            br1["g_to"] .+= g_add
+            br1["b_to"] .+= b_add
         end
 
         # --- IMPEDANCE MERGE ---
-        br1["br_r"] .+= br2["br_r"]
-        br1["br_x"] .+= br2["br_x"]
+        br1["br_r"] = br1["br_r"][idx1, idx1] .+ br2["br_r"][idx2, idx2]
+        br1["br_x"] = br1["br_x"][idx1, idx1] .+ br2["br_x"][idx2, idx2]
+
+        # --- CONNECTION & RATINGS UPDATE ---
+        br1["f_connections"] = common
+        br1["t_connections"] = common
+        
+        for k in ["rate_a", "rate_b", "rate_c", "c_rating_a", "c_rating_b", "c_rating_c", "angmin", "angmax"]
+             if haskey(br1, k)
+                 v1 = br1[k][idx1]
+                 if haskey(br2, k)
+                      v2 = br2[k][idx2]
+                      br1[k] = min.(v1, v2)
+                 else
+                      br1[k] = v1
+                 end
+             end
+        end
 
         # Re-link br1 to bypass db
         if "$(br1["f_bus"])" == db
