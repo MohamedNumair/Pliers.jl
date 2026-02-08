@@ -2932,7 +2932,7 @@ function remove_all_superfluous_buses!(data::Dict)
 end
 
 
-# function reduce_network_intermediate_buses(data::Dict)
+# function reduce_network_intermediate_buses!(data::Dict)
 #     @assert !haskey(data, "nw") "Multinetwork not supported in this function."
 
 #     # 1. Pre-calculate bus connectivity (O(Branches))
@@ -3017,9 +3017,10 @@ end
 
 
 function reduce_network_buses!(data::Dict; remove_leafnodes=true)
-    reduce_network_intermediate_buses(data)
+    reduce_network_intermediate_buses!(data)
     if remove_leafnodes
         reduce_empty_leaf_buses!(data)
+        reduce_network_intermediate_buses!(data)
     end
 end
 
@@ -3032,7 +3033,7 @@ end
 
 
 """
-    reduce_network_intermediate_buses(data::Dict)
+    reduce_network_intermediate_buses!(data::Dict)
 
 Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing intermediate buses that have no load, no generation, and a degree of 2 or less (i.e., simple pass-through nodes).
 
@@ -3055,7 +3056,7 @@ The function performs the following steps:
 # Returns
 - The modified `data` dictionary with the topology simplified.
 """
-function reduce_network_intermediate_buses(data::Dict)
+function reduce_network_intermediate_buses!(data::Dict)
     @assert !haskey(data, "nw") "Multinetwork not supported in this function, apply before performing `make_multinetwork!`."
 
     # 1. Map Connectivity
@@ -3138,15 +3139,20 @@ function reduce_network_intermediate_buses(data::Dict)
         bus_a = "$(br1["f_bus"])" == db ? "$(br1["t_bus"])" : "$(br1["f_bus"])"
         bus_b = "$(br2["f_bus"])" == db ? "$(br2["t_bus"])" : "$(br2["f_bus"])"
 
+        @debug "Merging bus $db between bus $bus_a and bus $bus_b by merging branches $id1 and $id2"
         # --- SHUNT TRANSFER LOGIC ---
         # If db had shunts (g_fr, b_fr, etc.) we must sum them into the preserved branch
         # We assume we are merging br2 into br1
         for key in ["g_fr", "g_to", "b_fr", "b_to"]
             # Sum shunts from the deleted bus 'db' into br1
             if "$(br2["f_bus"])" == db
+           
+
                 br1["g_to"] .+= br2["g_fr"]
                 br1["b_to"] .+= br2["b_fr"]
             else
+                @debug br1["g_to"]
+                @debug br2["g_fr"]
                 br1["g_to"] .+= br2["g_to"]
                 br1["b_to"] .+= br2["b_to"]
             end
@@ -3300,7 +3306,6 @@ function reduce_empty_leaf_buses!(data::Dict)
             end
         end
     end
-    reduce_network_intermediate_buses(data)
     return data
 end
 #=
@@ -3339,5 +3344,5 @@ export get_graph_node, get_graph_edge, create_network_graph
 
 
 export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
-export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses, reduce_empty_leaf_buses!
+export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses!, reduce_empty_leaf_buses!, reduce_network_buses!
 end # module PMDUtils
