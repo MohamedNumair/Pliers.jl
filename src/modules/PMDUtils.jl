@@ -3357,6 +3357,185 @@ function reduce_empty_leaf_buses!(data::Dict)
     end
     return data
 end
+
+
+
+"""
+    terminal_bus_plot(data::Dict{String,Any}, bus_id)
+
+Generates a terminal-based ASCII plot showing the connections (incoming and outgoing edges) for a specific bus.
+Automatically detects if the data is an Engineering (lines) or Mathematical (branches) model.
+
+# Arguments
+- `data`: PMD data dictionary.
+- `bus_id`: The ID of the bus to inspect.
+
+# Example
+```julia
+terminal_bus_plot(eng, "sourcebus")
+```
+"""
+function terminal_bus_plot(data::Dict, bus_id)
+    # Determine model type
+    if haskey(data, "line")
+        edges = data["line"]
+        bus_key = bus_id
+    elseif haskey(data, "branch")
+        edges = data["branch"]
+        bus_key = bus_id 
+    else
+        error_text("Unknown data model: Data must contain 'line' (Engineering) or 'branch' (Mathematical) components.")
+        return
+    end
+
+    # Normalize target bus string
+    target_bus_str = string(bus_key)
+
+    # Collect connections
+    incoming = String[]
+    outgoing = String[]
+    
+    for (id, edge) in edges
+        f = string(edge["f_bus"])
+        t = string(edge["t_bus"])
+        
+        # Name resolution
+        #name = haskey(edge, "name") ? string(edge["name"]) : string(id)
+
+        # improved name resolution so that if there is "index" key in the argument that is concatendated to the name
+
+        if haskey(edge,"name")
+            if haskey(edge,"index")
+                name = string(edge["index"], " : ", edge["name"])
+            else
+                name = string(edge["name"])
+            end
+        else
+            name = string(id)
+        end
+
+        if f == target_bus_str
+            push!(outgoing, name)
+        elseif t == target_bus_str
+            push!(incoming, name)
+        end
+    end
+    
+    sort!(incoming)
+    sort!(outgoing)
+    
+    # ------------------
+    # Drawing Configuration
+    # ------------------
+    bus_label = "($target_bus_str)"
+    
+    # Box Drawing Characters
+    HL = "─"
+    VL = "│"
+    
+    # Connectors
+    C_CROSS = "┼"
+    C_T_L   = "┤" # Input only
+    C_T_R   = "├" # Output only
+    
+    C_B_CROSS = "┴"
+    C_B_L     = "┘"
+    C_B_R     = "└"
+    
+    # Format edge strings
+    # Incoming connects to RIGHT side of its block:  -- "name" --
+    fmt_inc(n) = " $HL$HL \"$n\" $HL$HL"
+    fmt_out(n) = "$HL$HL \"$n\" $HL$HL "
+    
+    W_L = isempty(incoming) ? 0 : maximum(length(fmt_inc(n)) for n in incoming)
+    
+    rows = max(length(incoming), length(outgoing))
+    
+    if rows == 0
+        println(BOLD(YELLOW_FG(bus_label)))
+        println("Isolated Bus.")
+        return
+    end
+    
+    bus_width_visible = length(bus_label)
+    
+    # Bus Center Offset from Left of Bus Block
+    bus_center_off = div(bus_width_visible, 2) 
+
+    # Loop rows
+    for i in 1:rows
+        
+        # Left Part
+        if i <= length(incoming)
+            raw = fmt_inc(incoming[i])
+            pad = W_L - length(raw)
+            left_str = " "^pad * string(CYAN_FG(raw))
+        else
+            left_str = " "^W_L
+        end
+        
+        # Center Part
+        if i == 1
+            # The Bus
+            center_str = string(BOLD(YELLOW_FG(bus_label)))
+        else
+            # The Spine
+            # Determine connector char
+            is_inc = i <= length(incoming)
+            is_out = i <= length(outgoing)
+            is_last = i == rows
+            
+            if is_last
+                if is_inc && is_out
+                    conn = C_B_CROSS
+                elseif is_inc
+                    conn = C_B_L
+                elseif is_out
+                    conn = C_B_R
+                else
+                    conn = VL 
+                end
+            else
+                 if is_inc && is_out
+                    conn = C_CROSS
+                elseif is_inc
+                    conn = C_T_L
+                elseif is_out
+                    conn = C_T_R
+                else
+                    conn = VL 
+                end
+            end
+            
+            # Construct spine string
+            fill_char_L = is_inc ? HL : " "
+            prefix = fill_char_L ^ bus_center_off
+            
+            rem_len = bus_width_visible - bus_center_off - 1
+            fill_char_R = is_out ? HL : " "
+            suffix = fill_char_R ^ rem_len
+            
+            center_str = string(CYAN_FG(prefix * conn * suffix))
+        end
+        
+        # Right Part
+        if i <= length(outgoing)
+            raw = fmt_out(outgoing[i])
+            right_str = string(CYAN_FG(raw))
+        else
+            right_str = ""
+        end
+        
+        println(left_str * center_str * right_str)
+    end
+end
+
+@define_table_from_file terminal_bus_plot
+
+
+
+
+
 #=
 ░██████████ ░██    ░██ ░█████████    ░██████   ░█████████  ░██████████
 ░██          ░██  ░██  ░██     ░██  ░██   ░██  ░██     ░██     ░██    
@@ -3381,7 +3560,7 @@ export show_example, show_transformer_math_components
 export pf_results, bus_res, branch_viz
 
 # Re-export eng explorer functions
-export eng_report, buses_table, lines_table, loads_table, linecodes_table, linecode_table, transformers_table
+export eng_report, buses_table, lines_table, loads_table, linecodes_table, linecode_table, transformers_table, terminal_bus_plot
 
 # Re-export math explorer functions
 export math_report, math_buses_table, math_branches_table, math_branch_details
