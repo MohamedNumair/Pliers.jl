@@ -735,7 +735,7 @@ transBritishto4326 = Proj.Transformation("EPSG:27700", "EPSG:4326", always_xy=tr
 
 A smart layout function that checks if the graph `g` allows for a tree-based layout.
 If `g` is a tree (weakly connected and |E| = |V| - 1), it attempts to use `GraphMakie.Buchheim()`.
-If `Buchheim` fails or if the graph is not a tree, it falls back to `GraphMakie.Spring()`.
+If `Buchheim` fails or if the graph is not a tree, it falls back to `GraphMakie.Stress(Ptype=Float32)()`.
 """
 function smart_layout(g)
     is_tree = false
@@ -754,11 +754,11 @@ function smart_layout(g)
             @debug "Graph appears to be a tree, using Buchheim layout"
             return GraphMakie.Buchheim()(g)
         catch e
-            @warn "Buchheim layout failed, falling back to Spring" exception = e
-            return GraphMakie.Spring()(g)
+            @warn "Buchheim layout failed, falling back to Stress" exception = e
+            return GraphMakie.Stress(Ptype=Float32)(g)
         end
     else
-        return GraphMakie.Spring()(g)
+        return GraphMakie.Stress(Ptype=Float32)(g)
     end
 end
 
