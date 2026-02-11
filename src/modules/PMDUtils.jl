@@ -3360,6 +3360,97 @@ end
 
 
 
+
+"""
+    fix_eng_directions!(eng::Dict{String,Any})
+
+Traverses the network from the source bus and corrects branch directions
+(swapping `f_bus`/`t_bus` for lines, and `bus[1]`/`bus[2]` for transformers)
+to ensure a consistent radial flow. This is critical for directed tree layouts.
+
+# Arguments
+- `eng::Dict{String,Any}`: The ENGINEERING model data dictionary. Modified in-place.
+"""
+function fix_eng_directions!(eng::Dict{String,Any})
+    # --- 1. Identify Source Bus ---
+    source_bus = nothing
+    if haskey(eng, "voltage_source")
+        if haskey(eng["voltage_source"], "source")
+            source_bus = eng["voltage_source"]["source"]["bus"]
+        elseif !isempty(eng["voltage_source"])
+            # Fallback: pick the first one found
+            first_vs = first(values(eng["voltage_source"]))
+            source_bus = first_vs["bus"]
+            @warn "No 'source' voltage source found. Assuming voltage source at bus '\$source_bus' is the root."
+        end
+    end
+
+    if isnothing(source_bus)
+        @warn "No voltage source found. Cannot determine flow direction."
+        return
+    end
+
+    # --- 2. Build Adjacency List ---
+    # bus_id -> Vector of (Neighbor, ComponentType, ComponentID)
+    adj = Dict{String, Vector{Tuple{String, String, String}}}()
+
+    function add_adj!(b1, b2, type, id)
+        push!(get!(adj, b1, []), (b2, type, id))
+        push!(get!(adj, b2, []), (b1, type, id))
+    end
+
+    if haskey(eng, "line")
+        for (id, line) in eng["line"]
+            add_adj!(line["f_bus"], line["t_bus"], "line", id)
+        end
+    end
+
+    if haskey(eng, "transformer")
+        for (id, trans) in eng["transformer"]
+            buses = trans["bus"]
+            if length(buses) >= 2
+                add_adj!(buses[1], buses[2], "transformer", id)
+            end
+        end
+    end
+
+    # --- 3. BFS Traversal & correction ---
+    queue = [source_bus]
+    visited = Set{String}([source_bus])
+
+    while !isempty(queue)
+        curr_bus = popfirst!(queue)
+
+        if haskey(adj, curr_bus)
+            for (neighbor, type, id) in adj[curr_bus]
+                if !(neighbor in visited)
+                    push!(visited, neighbor)
+                    push!(queue, neighbor)
+
+                    # We are moving curr_bus -> neighbor. Ensure component matches.
+                    if type == "line"
+                        line = eng["line"][id]
+                        # If defined as neighbor -> curr, swap it
+                        if line["f_bus"] == neighbor && line["t_bus"] == curr_bus
+                            line["f_bus"] = curr_bus
+                            line["t_bus"] = neighbor
+                        end
+                    elseif type == "transformer"
+                        trans = eng["transformer"][id]
+                        buses = trans["bus"]
+                        # If defined as neighbor -> curr, swap
+                        if buses[1] == neighbor && buses[2] == curr_bus
+                            buses[1] = curr_bus
+                            buses[2] = neighbor
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+
 """
     terminal_bus_plot(data::Dict{String,Any}, bus_id)
 
@@ -3573,4 +3664,5 @@ export get_graph_node, get_graph_edge, create_network_graph
 
 export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
 export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses!, reduce_empty_leaf_buses!, reduce_network_buses!
-end # module PMDUtils
+export fix_eng_directions!
+end # module PMDUtils    
