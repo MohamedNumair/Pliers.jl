@@ -1567,7 +1567,7 @@ Plots a network map based on the provided engineering data.
 # Example
 ```julia
 plot_network_map(eng)
-`````
+```
 """
 function plot_network_map(
     data::Dict{String,Any};
@@ -1635,6 +1635,7 @@ $$ |  $$ |$$    $$ |$$ |      $$ |  $$ |$$ |  $$/ /    $$ |  $$ | __ $$ |$$ |  $
 $$ |__$$ |$$$$$$$$/ $$ \_____ $$ \__$$ |$$ |     /$$$$$$$ |  $$ |/  |$$ |$$ \__$$ |$$ |  $$ |
 $$    $$/ $$       |$$       |$$    $$/ $$ |     $$    $$ |  $$  $$/ $$ |$$    $$/ $$ |  $$ |
 $$$$$$$/   $$$$$$$/  $$$$$$$/  $$$$$$/  $$/       $$$$$$$/    $$$$/  $$/  $$$$$$/  $$/   $$/ 
+
 =#
 
 function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
@@ -1814,7 +1815,7 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
         for (_, edge) in network_graph.eprops
             # Set default arrow properties
             edge[:arrow_show] = false
-            edge[:arrow_marker] = '⠀' #'↡' 
+            edge[:arrow_marker] = '⠀'  # '→' #'↡' 
             edge[:arrow_size] = 0
             edge[:arrow_shift] = 0.5
 
@@ -1891,7 +1892,7 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
         for (_, edge) in network_graph.eprops
             # Set default arrow properties
             edge[:arrow_show] = false
-            edge[:arrow_marker] = '⠀'
+            edge[:arrow_marker] =  '⠀'  # '→' '⠀'
             edge[:arrow_size] = 0
             edge[:arrow_shift] = 0.5
 
