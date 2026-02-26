@@ -225,6 +225,14 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
         end
     end
 
+    if haskey(eng_sym, :switch)
+        for (sw_id, sw) in eng_sym[:switch]
+            sw[:line_id] = sw_id
+            sw[:is_switch] = true
+            safe_add_edge!(Symbol(sw[:f_bus]), Symbol(sw[:t_bus]), sw)
+        end
+    end
+
     # --- 4. Coordinate Handling & Root Fix ---
 
     # Collect existing coordinates
@@ -495,6 +503,33 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
                 end
             catch e
                 @warn "Error adding edge for transformer $(t) ($f_bus -> $t_bus): $e"
+            end
+        end
+    end
+
+    if haskey(math_sym, :switch)
+        for (sw_id, sw) in math_sym[:switch]
+            sw[:branch_id] = sw_id
+            sw[:is_switch] = true
+
+            f_bus = Symbol(sw[:f_bus])
+            t_bus = Symbol(sw[:t_bus])
+
+            try
+                f_vertex = network_graph[f_bus, :bus_id]
+                t_vertex = network_graph[t_bus, :bus_id]
+
+                if has_edge(network_graph, f_vertex, t_vertex)
+                    for (k, v) in sw
+                        set_prop!(network_graph, f_vertex, t_vertex, k, v)
+                    end
+                else
+                    add_edge!(network_graph, f_vertex, t_vertex, sw)
+                    push!(get!(adj_list, f_bus, []), t_bus)
+                    push!(get!(adj_list, t_bus, []), f_bus)
+                end
+            catch e
+                @warn "Error adding edge for switch $(sw_id) ($f_bus -> $t_bus): $e"
             end
         end
     end
@@ -1839,7 +1874,15 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
             edge[:arrow_size] = 0
             edge[:arrow_shift] = 0.5
 
-            if !haskey(edge, :t_connections) # I am using this to determine that it is a transformer not a line
+            if haskey(edge, :is_switch) && edge[:is_switch]
+                # Switch decoration
+                edge[:edge_color] = :teal
+                edge[:arrow_show] = true
+                edge[:arrow_marker] = string(edge[:state]) == "OPEN" ? '□' : '■'
+                edge[:arrow_size] = 20
+                edge[:arrow_shift] = 0.5
+
+            elseif !haskey(edge, :t_connections) # I am using this to determine that it is a transformer not a line
                 edge[:edge_color] = :gold
                 edge[:arrow_show] = true
                 edge[:arrow_marker] = 'Ꝏ'
@@ -1926,11 +1969,21 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                 is_transformer = true
             end
 
+            # Determine if branch is a switch
+            is_switch = haskey(edge, :is_switch) && edge[:is_switch]
+
             # Assume gold for transformers (similar to lines without t_connections in ENG logic)
             if is_transformer
                 edge[:edge_color] = :gold
                 edge[:arrow_show] = true
                 edge[:arrow_marker] = 'Ꝏ'
+                edge[:arrow_size] = 20
+                edge[:arrow_shift] = 0.5
+            elseif is_switch
+                # Switch decoration: teal color, marker reflects open/closed state
+                edge[:edge_color] = :teal
+                edge[:arrow_show] = true
+                edge[:arrow_marker] = edge[:state] == 0 ? '□' : '■'
                 edge[:arrow_size] = 20
                 edge[:arrow_shift] = 0.5
             else

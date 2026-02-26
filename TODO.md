@@ -53,6 +53,11 @@ Functional Requirements:
 3. I want to be able edit a model that I have loaded -- specific table item (bus, line, etc.) or add a new item
 2. I want to be able to convert a model from one format to another
 
+# PMDGraph
+- [x] graph for MATHEMATICAL model
+- [x] transformer in the MATHEMATICAL model
+- [x] transformer coordinates correction in the MATHEMATICAL model
+- [x] switches in both ENGINEERING and MATHEMATICAL model
 
 
 List the tiles
