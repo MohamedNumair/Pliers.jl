@@ -1665,7 +1665,9 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                                 node[:node_color] = :black
                                 node[:node_marker] = :dtriangle  # `↓`
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         elseif length(node[:loads][1][:connections]) == 2
                             if node[:loads][1][:connections] == [1, 4]
@@ -1687,24 +1689,32 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                                 node[:node_color] = :blue
                                 node[:node_marker] = :rtriangle  # `↔`
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         elseif length(node[:loads][1][:connections]) == 3
                             if node[:loads][1][:connections] == [1, 2, 3]
                                 node[:node_color] = :purple
                                 node[:node_marker] = :pentagon
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         elseif length(node[:loads][1][:connections]) == 4
                             if node[:loads][1][:connections] == [1, 2, 3, 4]
                                 node[:node_color] = :purple
                                 node[:node_marker] = :pentagon
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         else
-                            error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            node[:node_color] = :gray
+                            node[:node_marker] = '?'
                         end
                         node[:marker_size] = 10
                     else
@@ -1752,7 +1762,9 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                                 node[:node_color] = :black
                                 node[:node_marker] = :dtriangle  # `↓`
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         elseif length(node[:loads][1][:connections]) == 2
                             if node[:loads][1][:connections] == [1, 4]
@@ -1774,24 +1786,32 @@ function _decorate_nodes!(network_graph::MetaDiGraph, data::Dict{String,Any})
                                 node[:node_color] = :blue
                                 node[:node_marker] = :rtriangle  # `↔`
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         elseif length(node[:loads][1][:connections]) == 3
                             if node[:loads][1][:connections] == [1, 2, 3]
                                 node[:node_color] = :purple
                                 node[:node_marker] = :pentagon
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         elseif length(node[:loads][1][:connections]) == 4
                             if node[:loads][1][:connections] == [1, 2, 3, 4]
                                 node[:node_color] = :purple
                                 node[:node_marker] = :pentagon
                             else
-                                error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                                node[:node_color] = :gray
+                                node[:node_marker] = '?'
                             end
                         else
-                            error("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            Pliers.warning_text("Unexpected load connections of length $(length(node[:loads])): $(node[:loads][1][:connections]) at node $(string(node[:bus_id]))")
+                            node[:node_color] = :gray
+                            node[:node_marker] = '?'
                         end
                         node[:marker_size] = 10
                     else
@@ -1839,7 +1859,8 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                         elseif edge[:t_connections] == [4]
                             edge[:edge_color] = :black
                         else
-                            error("Unexpected connections: $(edge[:t_connections])")
+                            Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                            edge[:edge_color] = :gray
                         end
                     elseif length(edge[:t_connections]) == 2
                         if edge[:t_connections] == [1, 4] || edge[:t_connections] == [4, 1]
@@ -1855,7 +1876,8 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                         elseif edge[:t_connections] == [3, 1] || edge[:t_connections] == [1, 3]
                             edge[:edge_color] = :magenta
                         else
-                            error("Unexpected connections: $(edge[:t_connections])")
+                            Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                            edge[:edge_color] = :gray
                         end
                     elseif length(edge[:t_connections]) == 3
                         if edge[:t_connections] == [1, 2, 3]
@@ -1867,13 +1889,15 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                         elseif edge[:t_connections] == [3, 1, 4]
                             edge[:edge_color] = :blue
                         else
-                            error("Unexpected connections: $(edge[:t_connections])")
+                            Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                            edge[:edge_color] = :gray
                         end
                     elseif length(edge[:t_connections]) == 4
                         if length(edge[:t_connections]) == 4
                             edge[:edge_color] = :purple
                         else
-                            error("Unexpected connections: $(edge[:t_connections])")
+                            Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                            edge[:edge_color] = :gray
                         end
                     else
                         edge[:edge_color] = :gray
@@ -1926,7 +1950,8 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                 elseif edge[:t_connections] == [4]
                     edge[:edge_color] = :black
                 else
-                    error("Unexpected connections: $(edge[:t_connections])")
+                    Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                    edge[:edge_color] = :gray
                 end
             elseif n_phases == 2
                 if edge[:t_connections] == [1, 4] || edge[:t_connections] == [4, 1]
@@ -1942,7 +1967,8 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                 elseif edge[:t_connections] == [3, 1] || edge[:t_connections] == [1, 3]
                     edge[:edge_color] = :magenta
                 else
-                    error("Unexpected connections: $(edge[:t_connections])")
+                    Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                    edge[:edge_color] = :gray
                 end
             elseif n_phases == 3
                 if edge[:t_connections] == [1, 2, 3]
@@ -1954,13 +1980,15 @@ function _decorate_edges!(network_graph::MetaDiGraph, data::Dict{String,Any})
                 elseif edge[:t_connections] == [3, 1, 4]
                     edge[:edge_color] = :blue
                 else
-                    error("Unexpected connections: $(edge[:t_connections])")
+                    Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                    edge[:edge_color] = :gray
                 end
             elseif n_phases == 4
                 if length(edge[:t_connections]) == 4
                     edge[:edge_color] = :purple
                 else
-                    error("Unexpected connections: $(edge[:t_connections])")
+                    Pliers.warning_text("Unexpected connections: $(edge[:t_connections])")
+                    edge[:edge_color] = :gray
                 end
             else
                 @warn "Unexpected number of phases: $n_phases for edge with connections $(get(edge, :t_connections, "N/A")), defaulting to gray"
