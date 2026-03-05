@@ -150,7 +150,8 @@ function create_network_graph_eng(eng::Dict{String,Any}, fallback_layout)
     # --- 2. Enrich Bus Data ---
     # Attach loads
     if haskey(eng_sym, :load)
-        for (_, load) in eng_sym[:load]
+        for (load_id, load) in eng_sym[:load]
+            load[:load_id] = load_id
             bus_id = Symbol(load[:bus])
             try
                 vertex_idx = network_graph[bus_id, :bus_id]
@@ -394,8 +395,9 @@ function create_network_graph_math(math::Dict{String,Any}, fallback_layout)
 
     # --- 2. Enrich Bus Data ---
     if haskey(math_sym, :load)
-        for (_, load) in math_sym[:load]
+        for (load_id, load) in math_sym[:load]
             try
+                load[:load_id] = load_id
                 bus_id = Symbol(load[:load_bus]) # math model often uses ints, ensure key match
 
                 # Robust lookup: try direct, then Symbol, then Int
@@ -1285,6 +1287,7 @@ function plot_network_tree(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
+    show_load_labels=false,
     layout=smart_layout,
     edge_labels_type=:line_id,
     phase="1",
@@ -1295,7 +1298,16 @@ function plot_network_tree(
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+
+    if show_load_labels
+        if show_node_labels
+            nlabels = [string(n, "\n", l) for (n, l) in zip(nlabels, lolabels)]
+        else
+            nlabels = lolabels
+        end
+    end
 
     # FORCED NODE FORMATTING:
     _decorate_nodes!(network_graph, data)
@@ -1318,7 +1330,7 @@ function plot_network_tree(
         network_graph;
         layout=layout,
         figure_size=figure_size,
-        show_node_labels=show_node_labels,
+        show_node_labels=show_node_labels || show_load_labels,
         nlabels=nlabels,
         show_edge_labels=show_edge_labels,
         elabels=elabels,
@@ -1365,6 +1377,7 @@ function plot_network_tree!(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
+    show_load_labels=false,
     layout=smart_layout,
     edge_labels_type=:line_id,
     phase="1",
@@ -1375,7 +1388,16 @@ function plot_network_tree!(
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+
+    if show_load_labels
+        if show_node_labels
+            nlabels = [string(n, "\n", l) for (n, l) in zip(nlabels, lolabels)]
+        else
+            nlabels = lolabels
+        end
+    end
 
     # FORCED NODE FORMATTING:
     _decorate_nodes!(network_graph, data)
@@ -1399,7 +1421,7 @@ function plot_network_tree!(
         network_graph;
         layout=layout,
         figure_size=figure_size,
-        show_node_labels=show_node_labels,
+        show_node_labels=show_node_labels || show_load_labels,
         nlabels=nlabels,
         show_edge_labels=show_edge_labels,
         elabels=elabels,
@@ -1478,6 +1500,14 @@ function plot_network_coords(
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
 
+    if show_load_labels
+        if show_node_labels
+            nlabels = [string(n, "\n", l) for (n, l) in zip(nlabels, lolabels)]
+        else
+            nlabels = lolabels
+        end
+    end
+
 
     # FORCED NODE FORMATTING:   
     _decorate_nodes!(network_graph, data)
@@ -1499,8 +1529,8 @@ function plot_network_coords(
     # Plot the graph
     return network_graph_plot(
         network_graph;
-        layout=GraphLayout, show_node_labels=show_node_labels,
-        nlabels=nlabels, #TODO: add extra kwarg for lolabels to re-use nodes
+        layout=GraphLayout, show_node_labels=show_node_labels || show_load_labels,
+        nlabels=nlabels,
         node_color=node_color,
         node_marker=node_marker,
         node_size=node_size,
@@ -1608,6 +1638,7 @@ function plot_network_map(
     data::Dict{String,Any};
     show_node_labels=false,
     show_edge_labels=false,
+    show_load_labels=false,
     edge_labels_type=:line_id,
     phase="1",
     kwargs...
@@ -1616,7 +1647,16 @@ function plot_network_map(
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
     elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+
+    if show_load_labels
+        if show_node_labels
+            nlabels = [string(n, "\n", l) for (n, l) in zip(nlabels, lolabels)]
+        else
+            nlabels = lolabels
+        end
+    end
 
 
     if !isa(GraphLayout, Function)
@@ -1643,7 +1683,7 @@ function plot_network_map(
             network_graph, GraphLayout;
             nlabels=nlabels,
             elabels=elabels,
-            show_node_labels=show_node_labels,
+            show_node_labels=show_node_labels || show_load_labels,
             show_edge_labels=show_edge_labels,
             node_color=node_color,
             node_marker=node_marker,
@@ -2138,31 +2178,20 @@ $$$$$$$$/  $$$$$$$/ $$$$$$$/   $$$$$$$/ $$/ $$$$$$$/        $$/   $$/  $$$$$$$/ 
 
 ## NODES
 function _write_nlabels(network_graph, data)
-    nlabels = []
-    for i in 1:nv(network_graph)
-        push!(nlabels,
-            string(network_graph[i, :bus_id])
-        )
-    end
-    return nlabels
+    return [string(props(network_graph, i)[:bus_id]) for i in 1:nv(network_graph)]
 end
 
 ## LOADS
-
 function _write_lolabels(network_graph, data)
-    lolabels = []
+    lolabels = Vector{String}(undef, nv(network_graph))
     for i in 1:nv(network_graph)
-        if !isempty(network_graph.vprops[i][:loads])
-            load_str = ""
-            for load in network_graph.vprops[i][:loads]
-                load_str *= "$(load[:bus])\n"
-            end
-            push!(lolabels, load_str)
+        loads = props(network_graph, i)[:loads]
+        if !isempty(loads)
+            lolabels[i] = join([string(load[:load_id]) for load in loads], ", ")
         else
-            push!(lolabels, "")
+            lolabels[i] = ""
         end
     end
-    @show lolabels
     return lolabels
 end
 
