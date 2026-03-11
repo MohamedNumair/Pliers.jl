@@ -1,0 +1,94 @@
+! IEEE 33-Bus Radial Distribution System - Three-Phase Equivalent
+! ============================================================================
+
+Clear
+
+New Circuit.IEEE33Bus 
+~ basekv=12.66 pu=1.00 phases=3 bus1=1 
+~ Angle=0 
+~ MVAsc3=2e6 MVASC1=2e6  ! to remove the source bus impedance
+
+! LINE DEFINITIONS
+
+New Line.L1_2   Bus1=1  Bus2=2  Phases=3 Length=1 Units=km R1=0.0922 X1=0.0470 R0=0.0922 X0=0.0470 C1=0 C0=0
+New Line.L2_3   Bus1=2  Bus2=3  Phases=3 Length=1 Units=km R1=0.4930 X1=0.2511 R0=0.4930 X0=0.2511 C1=0 C0=0
+New Line.L3_4   Bus1=3  Bus2=4  Phases=3 Length=1 Units=km R1=0.3660 X1=0.1864 R0=0.3660 X0=0.1864 C1=0 C0=0
+New Line.L4_5   Bus1=4  Bus2=5  Phases=3 Length=1 Units=km R1=0.3811 X1=0.1941 R0=0.3811 X0=0.1941 C1=0 C0=0
+New Line.L5_6   Bus1=5  Bus2=6  Phases=3 Length=1 Units=km R1=0.8190 X1=0.7070 R0=0.8190 X0=0.7070 C1=0 C0=0
+New Line.L6_7   Bus1=6  Bus2=7  Phases=3 Length=1 Units=km R1=0.1872 X1=0.6188 R0=0.1872 X0=0.6188 C1=0 C0=0
+New Line.L7_8   Bus1=7  Bus2=8  Phases=3 Length=1 Units=km R1=0.7114 X1=0.2351 R0=0.7114 X0=0.2351 C1=0 C0=0
+New Line.L8_9   Bus1=8  Bus2=9  Phases=3 Length=1 Units=km R1=1.0300 X1=0.7400 R0=1.0300 X0=0.7400 C1=0 C0=0
+New Line.L9_10  Bus1=9  Bus2=10 Phases=3 Length=1 Units=km R1=1.0440 X1=0.7400 R0=1.0440 X0=0.7400 C1=0 C0=0
+New Line.L10_11 Bus1=10 Bus2=11 Phases=3 Length=1 Units=km R1=0.1966 X1=0.0650 R0=0.1966 X0=0.0650 C1=0 C0=0
+New Line.L11_12 Bus1=11 Bus2=12 Phases=3 Length=1 Units=km R1=0.3744 X1=0.1238 R0=0.3744 X0=0.1238 C1=0 C0=0
+New Line.L12_13 Bus1=12 Bus2=13 Phases=3 Length=1 Units=km R1=1.4680 X1=1.1550 R0=1.4680 X0=1.1550 C1=0 C0=0
+New Line.L13_14 Bus1=13 Bus2=14 Phases=3 Length=1 Units=km R1=0.5416 X1=0.7129 R0=0.5416 X0=0.7129 C1=0 C0=0
+New Line.L14_15 Bus1=14 Bus2=15 Phases=3 Length=1 Units=km R1=0.5910 X1=0.5260 R0=0.5910 X0=0.5260 C1=0 C0=0
+New Line.L15_16 Bus1=15 Bus2=16 Phases=3 Length=1 Units=km R1=0.7463 X1=0.5450 R0=0.7463 X0=0.5450 C1=0 C0=0
+New Line.L16_17 Bus1=16 Bus2=17 Phases=3 Length=1 Units=km R1=1.2890 X1=1.7210 R0=1.2890 X0=1.7210 C1=0 C0=0
+New Line.L17_18 Bus1=17 Bus2=18 Phases=3 Length=1 Units=km R1=0.7320 X1=0.5740 R0=0.7320 X0=0.5740 C1=0 C0=0
+
+New Line.L2_19  Bus1=2  Bus2=19 Phases=3 Length=1 Units=km R1=0.1640 X1=0.1565 R0=0.1640 X0=0.1565 C1=0 C0=0
+New Line.L19_20 Bus1=19 Bus2=20 Phases=3 Length=1 Units=km R1=1.5042 X1=1.3554 R0=1.5042 X0=1.3554 C1=0 C0=0
+New Line.L20_21 Bus1=20 Bus2=21 Phases=3 Length=1 Units=km R1=0.4095 X1=0.4784 R0=0.4095 X0=0.4784 C1=0 C0=0
+New Line.L21_22 Bus1=21 Bus2=22 Phases=3 Length=1 Units=km R1=0.7089 X1=0.9373 R0=0.7089 X0=0.9373 C1=0 C0=0
+
+New Line.L3_23  Bus1=3  Bus2=23 Phases=3 Length=1 Units=km R1=0.4512 X1=0.3083 R0=0.4512 X0=0.3083 C1=0 C0=0
+New Line.L23_24 Bus1=23 Bus2=24 Phases=3 Length=1 Units=km R1=0.8980 X1=0.7091 R0=0.8980 X0=0.7091 C1=0 C0=0
+New Line.L24_25 Bus1=24 Bus2=25 Phases=3 Length=1 Units=km R1=0.8960 X1=0.7011 R0=0.8960 X0=0.7011 C1=0 C0=0
+
+New Line.L6_26  Bus1=6  Bus2=26 Phases=3 Length=1 Units=km R1=0.2030 X1=0.1034 R0=0.2030 X0=0.1034 C1=0 C0=0
+New Line.L26_27 Bus1=26 Bus2=27 Phases=3 Length=1 Units=km R1=0.2842 X1=0.1447 R0=0.2842 X0=0.1447 C1=0 C0=0
+New Line.L27_28 Bus1=27 Bus2=28 Phases=3 Length=1 Units=km R1=1.0590 X1=0.9337 R0=1.0590 X0=0.9337 C1=0 C0=0
+New Line.L28_29 Bus1=28 Bus2=29 Phases=3 Length=1 Units=km R1=0.8042 X1=0.7006 R0=0.8042 X0=0.7006 C1=0 C0=0
+
+New Line.L29_30 Bus1=29 Bus2=30 Phases=3 Length=1 Units=km R1=0.5075 X1=0.2585 R0=0.5075 X0=0.2585 C1=0 C0=0
+New Line.L30_31 Bus1=30 Bus2=31 Phases=3 Length=1 Units=km R1=0.9744 X1=0.9630 R0=0.9744 X0=0.9630 C1=0 C0=0
+New Line.L31_32 Bus1=31 Bus2=32 Phases=3 Length=1 Units=km R1=0.3105 X1=0.3619 R0=0.3105 X0=0.3619 C1=0 C0=0
+New Line.L32_33 Bus1=32 Bus2=33 Phases=3 Length=1 Units=km R1=0.3410 X1=0.5302 R0=0.3410 X0=0.5302 C1=0 C0=0
+
+! There are switched lines that are normally open. 
+! New Line.Tie1 Bus1=21 Bus2=8  Phases=3 Length=1 R1=2.0000 X1=2.0000 R0=2.0000 X0=2.0000 C1=0 C0=0 enabled=false
+! New Line.Tie2 Bus1=9  Bus2=15 Phases=3 Length=1 R1=2.0000 X1=2.0000 R0=2.0000 X0=2.0000 C1=0 C0=0 enabled=false
+! New Line.Tie3 Bus1=12 Bus2=22 Phases=3 Length=1 R1=2.0000 X1=2.0000 R0=2.0000 X0=2.0000 C1=0 C0=0 enabled=false
+! New Line.Tie4 Bus1=18 Bus2=33 Phases=3 Length=1 R1=0.5000 X1=0.5000 R0=0.5000 X0=0.5000 C1=0 C0=0 enabled=false
+! New Line.Tie5 Bus1=25 Bus2=29 Phases=3 Length=1 R1=0.5000 X1=0.5000 R0=0.5000 X0=0.5000 C1=0 C0=0 enabled=false
+
+! LOAD DEFINITIONS
+
+New Load.Load2  Bus1=2  Phases=3 kV=12.66 kW=100 kvar=60   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load3  Bus1=3  Phases=3 kV=12.66 kW=90  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load4  Bus1=4  Phases=3 kV=12.66 kW=120 kvar=80   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load5  Bus1=5  Phases=3 kV=12.66 kW=60  kvar=30   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load6  Bus1=6  Phases=3 kV=12.66 kW=60  kvar=20   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load7  Bus1=7  Phases=3 kV=12.66 kW=200 kvar=100  Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load8  Bus1=8  Phases=3 kV=12.66 kW=200 kvar=100  Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load9  Bus1=9  Phases=3 kV=12.66 kW=60  kvar=20   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load10 Bus1=10 Phases=3 kV=12.66 kW=60  kvar=20   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load11 Bus1=11 Phases=3 kV=12.66 kW=45  kvar=30   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load12 Bus1=12 Phases=3 kV=12.66 kW=60  kvar=35   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load13 Bus1=13 Phases=3 kV=12.66 kW=60  kvar=35   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load14 Bus1=14 Phases=3 kV=12.66 kW=120 kvar=80   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load15 Bus1=15 Phases=3 kV=12.66 kW=60  kvar=10   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load16 Bus1=16 Phases=3 kV=12.66 kW=60  kvar=20   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load17 Bus1=17 Phases=3 kV=12.66 kW=60  kvar=20   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load18 Bus1=18 Phases=3 kV=12.66 kW=90  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load19 Bus1=19 Phases=3 kV=12.66 kW=90  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load20 Bus1=20 Phases=3 kV=12.66 kW=90  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load21 Bus1=21 Phases=3 kV=12.66 kW=90  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load22 Bus1=22 Phases=3 kV=12.66 kW=90  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load23 Bus1=23 Phases=3 kV=12.66 kW=90  kvar=50   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load24 Bus1=24 Phases=3 kV=12.66 kW=420 kvar=200  Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load25 Bus1=25 Phases=3 kV=12.66 kW=420 kvar=200  Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load26 Bus1=26 Phases=3 kV=12.66 kW=60  kvar=25   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load27 Bus1=27 Phases=3 kV=12.66 kW=60  kvar=25   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load28 Bus1=28 Phases=3 kV=12.66 kW=60  kvar=20   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load29 Bus1=29 Phases=3 kV=12.66 kW=120 kvar=70   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load30 Bus1=30 Phases=3 kV=12.66 kW=200 kvar=600  Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load31 Bus1=31 Phases=3 kV=12.66 kW=150 kvar=70   Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load32 Bus1=32 Phases=3 kV=12.66 kW=210 kvar=100  Model=1 Vminpu=0.80 Vmaxpu=1.20
+New Load.Load33 Bus1=33 Phases=3 kV=12.66 kW=60  kvar=40   Model=1 Vminpu=0.80 Vmaxpu=1.20
+
+Set Voltagebases=[12.66]
+Calcvoltagebases
+Solve
