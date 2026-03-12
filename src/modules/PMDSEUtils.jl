@@ -13,6 +13,7 @@ See the main Pliers module for function documentation.
 module PMDSEUtils
 
 using ..Pliers
+using ..Pliers.PMDUtils: dictify_solution!, add_vmn_p_q
 
 
 
@@ -352,10 +353,10 @@ function math_meas_table(math::Dict{String, Any}, condition::Function; se_sol= n
 end
 
 
-function write_sm_measurements(PF_RES, math, measurements_file, measurement_model; σ=0.05)
+function write_sm_measurements(PF_RES, math, measurements_file, measurement_model, write_measurements_fn::Function; σ=0.05)
     dictify_solution!(PF_RES["solution"], math)
     math_meas_en = add_vmn_p_q(math, PF_RES["solution"])
-    write_measurements!(measurement_model, math_meas_en, PF_RES, measurements_file, σ=σ) 
+    write_measurements_fn(measurement_model, math_meas_en, PF_RES, measurements_file, σ=σ) 
 end
 
 
