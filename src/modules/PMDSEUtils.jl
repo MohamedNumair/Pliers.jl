@@ -352,7 +352,7 @@ function math_meas_table(math::Dict{String, Any}, condition::Function; se_sol= n
 end
 
 
-function write_sm_measurements(PF_RES, math, measurements_file; σ=0.05, measurement_model =PowerModelsDistributionStateEstimation.IndustrialENMeasurementsModel )
+function write_sm_measurements(PF_RES, math, measurements_file, measurement_model; σ=0.05)
     dictify_solution!(PF_RES["solution"], math)
     math_meas_en = add_vmn_p_q(math, PF_RES["solution"])
     write_measurements!(measurement_model, math_meas_en, PF_RES, measurements_file, σ=σ) 
