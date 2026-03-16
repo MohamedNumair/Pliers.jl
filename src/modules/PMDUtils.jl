@@ -2398,7 +2398,7 @@ end
 function _add_delta_readings(pf_sol, math, math_meas)
 
     for (l, load) in math["load"]
-        if load["configuration"] == DELTA
+        if string(load["configuration"]) == "DELTA"
             pf_sol["load"][l]["ptot"] = [sum(real(value) for (key, value) in pf_sol["load"][l]["power"])]
             pf_sol["load"][l]["qtot"] = [sum(imag(value) for (key, value) in pf_sol["load"][l]["power"])]
             
@@ -3192,8 +3192,8 @@ function reduce_network_intermediate_buses!(data::Dict)
         end
 
         # --- IMPEDANCE MERGE ---
-        br1["br_r"] = br1["br_r"][idx1, idx1] .+ br2["br_r"][idx2, idx2]
-        br1["br_x"] = br1["br_x"][idx1, idx1] .+ br2["br_x"][idx2, idx2]
+        br1["br_r"] = br1["br_r"][idx1, idx1] .+ br2["br_r"][idx2, idx2] #TODO: if transformer impedance -- make sure to update the v_base and per_unit
+        br1["br_x"] = br1["br_x"][idx1, idx1] .+ br2["br_x"][idx2, idx2] #TODO: if transformer impedance -- make sure to update the v_base and per_unit
 
         # --- CONNECTION & RATINGS UPDATE ---
         br1["f_connections"] = common
