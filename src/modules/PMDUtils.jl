@@ -3642,14 +3642,6 @@ function _collapse_virtual_transformer_group!(data::Dict, group_name::String, gr
         v !== nothing ? v : _math_bus_vbase(data, endpoints[2].external_bus)
     end
 
-    # Internal-bus kV base (used below as fallback for virtual branches that lack a
-    # "vbase" field in the branch dict).
-    int_vbase = let
-        v1 = _ep_vbase_from_tx(tx_1, virtual_bus_ids; external=false)
-        v2 = _ep_vbase_from_tx(tx_2, virtual_bus_ids; external=false)
-        v1 !== nothing ? v1 : (v2 !== nothing ? v2 : 1.0)
-    end
-
     start_idx = 1
     if target_vbase == :higher
         start_idx = vbase_ext_1 >= vbase_ext_2 ? 1 : 2
@@ -3669,8 +3661,9 @@ function _collapse_virtual_transformer_group!(data::Dict, group_name::String, gr
         branch_path = reverse(branch_path)
     end
 
+    # vbase_target is metadata only — it labels which voltage zone the equivalent branch
+    # belongs to for downstream Z_pu → Z_Ω conversions.  No impedance rescaling uses it.
     vbase_target = target_vbase == :lower ? min(vbase_ext_1, vbase_ext_2) : max(vbase_ext_1, vbase_ext_2)
-    sbase = _math_sbase(data)
 
     phase_labels = sort(collect(intersect(Set(start_ep.internal_connections), Set(end_ep.internal_connections))))
     if isempty(phase_labels)
@@ -3724,20 +3717,13 @@ function _collapse_virtual_transformer_group!(data::Dict, group_name::String, gr
         eq_g_to = eq_g_to[idx_eq, idx_eq]
         eq_b_to = eq_b_to[idx_eq, idx_eq]
 
-        # Use the branch's own "vbase" field when present; otherwise fall back to the
-        # internal-bus kV base we derived from the virtual-transformer endpoints.
-        # This prevents _math_branch_vbase from silently returning the 1.0 per-unit
-        # stub that PMD stores in the bus dict when no physical kV is recorded there.
-        vbase_branch = if haskey(br, "vbase")
-            Float64(br["vbase"])
-        else
-            fb = _math_bus_vbase(data, br["f_bus"])
-            isapprox(fb, 1.0; atol=1e-9) ? int_vbase : fb
-        end
-        z_scale, y_scale, _, _ = _math_rebase_scales(vbase_branch, vbase_target, sbase, sbase)
-
-        eq_r .+= br["br_r"][idx_br, idx_br] .* z_scale
-        eq_x .+= br["br_x"][idx_br, idx_br] .* z_scale
+        # All quantities in PMD's MATH model are in per-unit on the same consistent
+        # system base (fixed sbase, with V_base chosen so the transformer turns ratio
+        # equals 1.0 pu).  The ideal virtual transformers are therefore 1:1 wires in
+        # per-unit and can be removed without any impedance rescaling.  Direct summation
+        # of the virtual-branch per-unit values is both correct and sufficient.
+        eq_r .+= br["br_r"][idx_br, idx_br]
+        eq_x .+= br["br_x"][idx_br, idx_br]
 
         g_enter = forward ? br["g_fr"] : br["g_to"]
         b_enter = forward ? br["b_fr"] : br["b_to"]
@@ -3745,12 +3731,12 @@ function _collapse_virtual_transformer_group!(data::Dict, group_name::String, gr
         b_leave = forward ? br["b_to"] : br["b_fr"]
 
         if k == 1
-            eq_g_fr .+= g_enter[idx_br, idx_br] .* y_scale
-            eq_b_fr .+= b_enter[idx_br, idx_br] .* y_scale
+            eq_g_fr .+= g_enter[idx_br, idx_br]
+            eq_b_fr .+= b_enter[idx_br, idx_br]
         end
         if k == length(branch_path)
-            eq_g_to .+= g_leave[idx_br, idx_br] .* y_scale
-            eq_b_to .+= b_leave[idx_br, idx_br] .* y_scale
+            eq_g_to .+= g_leave[idx_br, idx_br]
+            eq_b_to .+= b_leave[idx_br, idx_br]
         end
 
         phase_labels = common
