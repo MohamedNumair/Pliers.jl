@@ -9,8 +9,6 @@ using LinearAlgebra
         phase_project=false,
     )
 
-    bus_vbase(bus_id) = Float64(get(math["bus"][string(bus_id)], "vbase", get(math["bus"][string(bus_id)], "base_kv", 1.0)))
-
     grouped_transformers = Dict{String, Vector{String}}()
     for (tx_id, tx) in math["transformer"]
         tx_name = string(get(tx, "name", ""))
@@ -45,6 +43,9 @@ using LinearAlgebra
     if selected_group !== nothing
         virtual_bus_prefix = "_virtual_bus.transformer.$selected_group" * "_"
 
+        # Read external-bus kV bases from the virtual transformers' f_vbase/t_vbase fields.
+        # PMD stores reliable kV values there; the bus-dict "vbase" field is a per-unit
+        # stub (1.0) and must not be used for multi-voltage-level referral decisions.
         ext_vbases = Float64[]
         for tx_id in tx_ids
             tx = math["transformer"][tx_id]
@@ -55,16 +56,25 @@ using LinearAlgebra
             t_name = string(math["bus"][string(t_bus)]["name"])
 
             if startswith(f_name, virtual_bus_prefix)
-                push!(ext_vbases, bus_vbase(t_bus))
+                # internal = f_bus  →  external bus is t_bus  →  kV base is t_vbase
+                v = get(tx, "t_vbase", nothing)
+                v !== nothing && push!(ext_vbases, Float64(v))
             elseif startswith(t_name, virtual_bus_prefix)
-                push!(ext_vbases, bus_vbase(f_bus))
+                # internal = t_bus  →  external bus is f_bus  →  kV base is f_vbase
+                v = get(tx, "f_vbase", nothing)
+                v !== nothing && push!(ext_vbases, Float64(v))
             end
         end
 
         @test !isempty(ext_vbases)
 
         if !isempty(ext_vbases)
+            # For the trans_example.dss (11 kV / 0.4 kV YY transformer) the higher
+            # external bus base is 11 kV, which is the referral target for :higher.
             target_vbase = maximum(ext_vbases)
+
+            # Sanity-check: we must be able to distinguish the two voltage zones.
+            @test minimum(ext_vbases) < maximum(ext_vbases)
 
             reduced = deepcopy(math)
             Pliers.PMDUtils.reduce_network_buses_and_transformers!(reduced)
@@ -89,11 +99,24 @@ using LinearAlgebra
 
             if length(eq_ids) == 1
                 eq_branch = reduced["branch"][first(eq_ids)]
-                @test isapprox(eq_branch["vbase"], target_vbase; rtol=1e-9, atol=1e-9)
+
+                # The equivalent branch must be labelled at the HV (11 kV) base.
+                @test isapprox(eq_branch["vbase"], target_vbase; rtol=1e-6)
+
                 @test all(isfinite, diag(eq_branch["br_r"]))
                 @test all(isfinite, diag(eq_branch["br_x"]))
+
+                # Resistance and reactance must be strictly positive (transformer has
+                # both %Rs and xhl > 0 in the fixture).
                 @test sum(diag(eq_branch["br_r"])) > 0
                 @test sum(diag(eq_branch["br_x"])) > 0
+
+                # Impedance referred to 11 kV must be much smaller than the same
+                # component expressed at 0.4 kV (scale ratio is (0.4/11)^2 ≈ 0.00132).
+                # Concretely: the diagonal resistance referred to 11 kV should be well
+                # below 1.0 pu on the system base (0.2 MVA, 11 kV → Z_base = 605 Ω).
+                @test sum(diag(eq_branch["br_r"])) < 1.0
+                @test sum(diag(eq_branch["br_x"])) < 1.0
             end
         end
     end
