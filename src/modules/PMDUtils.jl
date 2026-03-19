@@ -3036,6 +3036,67 @@ function reduce_network_buses!(data::Dict; remove_leafnodes=true)
 end
 
 
+# Internal helper: read network sbase for per-unit rebasing calculations.
+function _math_sbase(data::Dict)
+    settings = get(data, "settings", Dict{String,Any}())
+    return Float64(get(settings, "sbase", get(settings, "sbase_default", 1.0)))
+end
+
+
+# Internal helper: get bus voltage base (kV) with safe fallback.
+function _math_bus_vbase(data::Dict, bus_id)::Float64
+    bus_key = string(bus_id)
+    if haskey(data, "bus") && haskey(data["bus"], bus_key)
+        return Float64(get(data["bus"][bus_key], "vbase", 1.0))
+    end
+    return 1.0
+end
+
+
+# Internal helper: get branch vbase (kV), or infer from f_bus.
+function _math_branch_vbase(data::Dict, branch::Dict{String,Any})::Float64
+    if haskey(branch, "vbase")
+        return Float64(branch["vbase"])
+    end
+    return _math_bus_vbase(data, branch["f_bus"])
+end
+
+
+"""
+    _math_rebase_scales(vbase_from, vbase_to, sbase_from, sbase_to)
+
+Returns `(z_scale, y_scale, i_scale, s_scale)` to convert per-unit quantities
+from one electrical base to another.
+
+- `z_scale`: multiplier for impedances (`br_r`, `br_x`)
+- `y_scale`: multiplier for shunts (`g`, `b`)
+- `i_scale`: multiplier for current ratings
+- `s_scale`: multiplier for power ratings
+"""
+function _math_rebase_scales(vbase_from::Real, vbase_to::Real, sbase_from::Real, sbase_to::Real)
+    z_from = (vbase_from^2) / sbase_from
+    z_to = (vbase_to^2) / sbase_to
+    z_scale = z_from / z_to
+    y_scale = inv(z_scale)
+    i_scale = (sbase_from / sbase_to) / (vbase_from / vbase_to)
+    s_scale = sbase_from / sbase_to
+    return z_scale, y_scale, i_scale, s_scale
+end
+
+
+# Internal helper to create a new numeric component id.
+function _next_numeric_component_id(components::Dict)
+    max_idx = 0
+    for key in keys(components)
+        parsed = tryparse(Int, string(key))
+        if parsed !== nothing
+            max_idx = max(max_idx, parsed)
+        end
+    end
+    return string(max_idx + 1), max_idx + 1
+end
+
+
 
 
 
@@ -3166,6 +3227,13 @@ function reduce_network_intermediate_buses!(data::Dict)
         idx1 = [findfirst(isequal(c), conns1) for c in common]
         idx2 = [findfirst(isequal(c), conns2) for c in common]
 
+        # Rebase branch-2 quantities to branch-1 base before combining.
+        sbase = _math_sbase(data)
+        vbase_br1 = _math_branch_vbase(data, br1)
+        vbase_br2 = _math_branch_vbase(data, br2)
+        z_scale_2to1, y_scale_2to1, i_scale_2to1, s_scale_2to1 =
+            _math_rebase_scales(vbase_br2, vbase_br1, sbase, sbase)
+
         # --- SHUNT TRANSFER LOGIC ---
         # Resize br1 shunts to common phases
         br1["g_fr"] = br1["g_fr"][idx1, idx1]
@@ -3175,11 +3243,11 @@ function reduce_network_intermediate_buses!(data::Dict)
         
         # Get relevant shunts from br2 (at db) to add to br1 (at db)
         if "$(br2["f_bus"])" == db
-            g_add = br2["g_fr"][idx2, idx2]
-            b_add = br2["b_fr"][idx2, idx2]
+            g_add = br2["g_fr"][idx2, idx2] .* y_scale_2to1
+            b_add = br2["b_fr"][idx2, idx2] .* y_scale_2to1
         else
-            g_add = br2["g_to"][idx2, idx2]
-            b_add = br2["b_to"][idx2, idx2]
+            g_add = br2["g_to"][idx2, idx2] .* y_scale_2to1
+            b_add = br2["b_to"][idx2, idx2] .* y_scale_2to1
         end
 
         # Add shunts to the end of br1 connected to db
@@ -3192,8 +3260,8 @@ function reduce_network_intermediate_buses!(data::Dict)
         end
 
         # --- IMPEDANCE MERGE ---
-        br1["br_r"] = br1["br_r"][idx1, idx1] .+ br2["br_r"][idx2, idx2] #TODO: if transformer impedance -- make sure to update the v_base and per_unit
-        br1["br_x"] = br1["br_x"][idx1, idx1] .+ br2["br_x"][idx2, idx2] #TODO: if transformer impedance -- make sure to update the v_base and per_unit
+        br1["br_r"] = br1["br_r"][idx1, idx1] .+ (br2["br_r"][idx2, idx2] .* z_scale_2to1)
+        br1["br_x"] = br1["br_x"][idx1, idx1] .+ (br2["br_x"][idx2, idx2] .* z_scale_2to1)
 
         # --- CONNECTION & RATINGS UPDATE ---
         br1["f_connections"] = common
@@ -3204,6 +3272,11 @@ function reduce_network_intermediate_buses!(data::Dict)
                  v1 = br1[k][idx1]
                  if haskey(br2, k)
                       v2 = br2[k][idx2]
+                      if k in ["c_rating_a", "c_rating_b", "c_rating_c"]
+                          v2 = v2 .* i_scale_2to1
+                      elseif k in ["rate_a", "rate_b", "rate_c"]
+                          v2 = v2 .* s_scale_2to1
+                      end
                       br1[k] = min.(v1, v2)
                  else
                       br1[k] = v1
@@ -3355,6 +3428,408 @@ function reduce_empty_leaf_buses!(data::Dict)
             end
         end
     end
+    return data
+end
+
+
+function _collect_virtual_transformer_groups(data::Dict)
+    groups = Dict{String, Dict{Symbol, Vector{String}}}()
+
+    for (tx_id, tx) in get(data, "transformer", Dict())
+        tx_name = string(get(tx, "name", ""))
+        m = match(r"^_virtual_transformer\.(.+)\.(\d+)$", tx_name)
+        m === nothing && continue
+
+        group_name = m.captures[1]
+        group = get!(groups, group_name) do
+            Dict(:transformers => String[], :branches => String[], :buses => String[])
+        end
+        push!(group[:transformers], string(tx_id))
+    end
+
+    for (group_name, group) in groups
+        bus_prefix = "_virtual_bus.transformer.$group_name" * "_"
+        branch_prefix = "_virtual_branch.transformer.$group_name" * "_"
+
+        group[:buses] = [
+            string(bus_id)
+            for (bus_id, bus) in get(data, "bus", Dict())
+            if startswith(string(get(bus, "name", "")), bus_prefix)
+        ]
+
+        group[:branches] = [
+            string(br_id)
+            for (br_id, br) in get(data, "branch", Dict())
+            if startswith(string(get(br, "name", "")), branch_prefix)
+        ]
+    end
+
+    return groups
+end
+
+
+function _find_branch_path(branches::Dict, branch_ids::Vector{String}, start_bus::Int, end_bus::Int)
+    adjacency = Dict{Int, Vector{Tuple{Int, String}}}()
+
+    for br_id in unique(branch_ids)
+        haskey(branches, br_id) || continue
+        br = branches[br_id]
+        f_bus = Int(br["f_bus"])
+        t_bus = Int(br["t_bus"])
+        push!(get!(adjacency, f_bus, Tuple{Int, String}[]), (t_bus, br_id))
+        push!(get!(adjacency, t_bus, Tuple{Int, String}[]), (f_bus, br_id))
+    end
+
+    if !haskey(adjacency, start_bus) || !haskey(adjacency, end_bus)
+        return nothing, nothing
+    end
+
+    queue = [start_bus]
+    visited = Set{Int}([start_bus])
+    parent_bus = Dict{Int, Int}()
+    parent_branch = Dict{Int, String}()
+
+    found = false
+    while !isempty(queue)
+        bus = popfirst!(queue)
+        if bus == end_bus
+            found = true
+            break
+        end
+
+        for (neighbor, br_id) in get(adjacency, bus, Tuple{Int, String}[])
+            if neighbor ∉ visited
+                push!(visited, neighbor)
+                parent_bus[neighbor] = bus
+                parent_branch[neighbor] = br_id
+                push!(queue, neighbor)
+            end
+        end
+    end
+
+    if !found
+        return nothing, nothing
+    end
+
+    bus_path = [end_bus]
+    branch_path = String[]
+    current = end_bus
+
+    while current != start_bus
+        pushfirst!(branch_path, parent_branch[current])
+        current = parent_bus[current]
+        pushfirst!(bus_path, current)
+    end
+
+    return bus_path, branch_path
+end
+
+
+function _collapse_virtual_transformer_group!(data::Dict, group_name::String, group::Dict{Symbol, Vector{String}}; target_vbase::Symbol=:higher)
+    tx_ids = [tx_id for tx_id in group[:transformers] if haskey(data["transformer"], tx_id)]
+    if length(tx_ids) != 2
+        @debug "Skipping transformer group $group_name: expected 2 ideal transformers, found $(length(tx_ids))."
+        return false
+    end
+
+    virtual_bus_ids = Set{Int}()
+    for bus_id in group[:buses]
+        parsed = tryparse(Int, bus_id)
+        parsed === nothing || push!(virtual_bus_ids, parsed)
+    end
+
+    if length(virtual_bus_ids) < 2
+        @warn "Skipping transformer group $group_name: could not identify virtual buses."
+        return false
+    end
+
+    endpoints = NamedTuple[]
+    for tx_id in tx_ids
+        tx = data["transformer"][tx_id]
+        f_bus = Int(tx["f_bus"])
+        t_bus = Int(tx["t_bus"])
+
+        f_is_virtual = f_bus in virtual_bus_ids
+        t_is_virtual = t_bus in virtual_bus_ids
+
+        if f_is_virtual == t_is_virtual
+            @warn "Skipping transformer group $group_name: invalid external/internal bus split for transformer $tx_id."
+            return false
+        end
+
+        if f_is_virtual
+            push!(endpoints, (
+                tx_id=tx_id,
+                internal_bus=f_bus,
+                external_bus=t_bus,
+                internal_connections=copy(tx["f_connections"]),
+                external_connections=copy(tx["t_connections"]),
+                status=Int(get(tx, "status", 1))
+            ))
+        else
+            push!(endpoints, (
+                tx_id=tx_id,
+                internal_bus=t_bus,
+                external_bus=f_bus,
+                internal_connections=copy(tx["t_connections"]),
+                external_connections=copy(tx["f_connections"]),
+                status=Int(get(tx, "status", 1))
+            ))
+        end
+    end
+
+    if endpoints[1].internal_bus == endpoints[2].internal_bus
+        @warn "Skipping transformer group $group_name: both ideal transformers connect to the same internal bus."
+        return false
+    end
+
+    bus_path, branch_path = _find_branch_path(
+        data["branch"],
+        group[:branches],
+        endpoints[1].internal_bus,
+        endpoints[2].internal_bus
+    )
+
+    if bus_path === nothing || isempty(branch_path)
+        @warn "Skipping transformer group $group_name: no internal virtual-branch path found between winding buses."
+        return false
+    end
+
+    vbase_ext_1 = _math_bus_vbase(data, endpoints[1].external_bus)
+    vbase_ext_2 = _math_bus_vbase(data, endpoints[2].external_bus)
+
+    start_idx = 1
+    if target_vbase == :higher
+        start_idx = vbase_ext_1 >= vbase_ext_2 ? 1 : 2
+    elseif target_vbase == :lower
+        start_idx = vbase_ext_1 <= vbase_ext_2 ? 1 : 2
+    else
+        @warn "Unknown target_vbase=$target_vbase for transformer reduction. Falling back to :higher."
+        start_idx = vbase_ext_1 >= vbase_ext_2 ? 1 : 2
+    end
+
+    end_idx = start_idx == 1 ? 2 : 1
+    start_ep = endpoints[start_idx]
+    end_ep = endpoints[end_idx]
+
+    if bus_path[1] != start_ep.internal_bus
+        bus_path = reverse(bus_path)
+        branch_path = reverse(branch_path)
+    end
+
+    vbase_target = target_vbase == :lower ? min(vbase_ext_1, vbase_ext_2) : max(vbase_ext_1, vbase_ext_2)
+    sbase = _math_sbase(data)
+
+    phase_labels = sort(collect(intersect(Set(start_ep.internal_connections), Set(end_ep.internal_connections))))
+    if isempty(phase_labels)
+        phase_labels = sort(collect(intersect(Set(start_ep.external_connections), Set(end_ep.external_connections))))
+    end
+    if isempty(phase_labels)
+        @warn "Skipping transformer group $group_name: no common phase labels between transformer terminals."
+        return false
+    end
+
+    n = length(phase_labels)
+    eq_r = zeros(n, n)
+    eq_x = zeros(n, n)
+    eq_g_fr = zeros(n, n)
+    eq_b_fr = zeros(n, n)
+    eq_g_to = zeros(n, n)
+    eq_b_to = zeros(n, n)
+
+    for (k, br_id) in enumerate(branch_path)
+        haskey(data["branch"], br_id) || continue
+        br = data["branch"][br_id]
+
+        bus_from = bus_path[k]
+        bus_to = bus_path[k + 1]
+        forward = Int(br["f_bus"]) == bus_from && Int(br["t_bus"]) == bus_to
+
+        con_in = forward ? br["f_connections"] : br["t_connections"]
+        con_out = forward ? br["t_connections"] : br["f_connections"]
+
+        common = sort(collect(intersect(Set(phase_labels), Set(con_in), Set(con_out))))
+        if isempty(common)
+            @warn "Skipping transformer group $group_name: incompatible phase sets in branch $br_id."
+            return false
+        end
+
+        idx_eq_tmp = [findfirst(isequal(c), phase_labels) for c in common]
+        idx_br_tmp = [findfirst(isequal(c), br["f_connections"]) for c in common]
+
+        if any(x -> x === nothing, idx_eq_tmp) || any(x -> x === nothing, idx_br_tmp)
+            @warn "Skipping transformer group $group_name: phase indexing mismatch in branch $br_id."
+            return false
+        end
+
+        idx_eq = [x::Int for x in idx_eq_tmp]
+        idx_br = [x::Int for x in idx_br_tmp]
+
+        eq_r = eq_r[idx_eq, idx_eq]
+        eq_x = eq_x[idx_eq, idx_eq]
+        eq_g_fr = eq_g_fr[idx_eq, idx_eq]
+        eq_b_fr = eq_b_fr[idx_eq, idx_eq]
+        eq_g_to = eq_g_to[idx_eq, idx_eq]
+        eq_b_to = eq_b_to[idx_eq, idx_eq]
+
+        vbase_branch = _math_branch_vbase(data, br)
+        z_scale, y_scale, _, _ = _math_rebase_scales(vbase_branch, vbase_target, sbase, sbase)
+
+        eq_r .+= br["br_r"][idx_br, idx_br] .* z_scale
+        eq_x .+= br["br_x"][idx_br, idx_br] .* z_scale
+
+        g_enter = forward ? br["g_fr"] : br["g_to"]
+        b_enter = forward ? br["b_fr"] : br["b_to"]
+        g_leave = forward ? br["g_to"] : br["g_fr"]
+        b_leave = forward ? br["b_to"] : br["b_fr"]
+
+        if k == 1
+            eq_g_fr .+= g_enter[idx_br, idx_br] .* y_scale
+            eq_b_fr .+= b_enter[idx_br, idx_br] .* y_scale
+        end
+        if k == length(branch_path)
+            eq_g_to .+= g_leave[idx_br, idx_br] .* y_scale
+            eq_b_to .+= b_leave[idx_br, idx_br] .* y_scale
+        end
+
+        phase_labels = common
+    end
+
+    external_common = sort(collect(intersect(Set(start_ep.external_connections), Set(end_ep.external_connections), Set(phase_labels))))
+    if isempty(external_common)
+        external_common = phase_labels
+    end
+
+    idx_final_tmp = [findfirst(isequal(c), phase_labels) for c in external_common]
+    if any(x -> x === nothing, idx_final_tmp)
+        @warn "Skipping transformer group $group_name: failed to align equivalent branch phases to external terminals."
+        return false
+    end
+
+    idx_final = [x::Int for x in idx_final_tmp]
+    eq_r = eq_r[idx_final, idx_final]
+    eq_x = eq_x[idx_final, idx_final]
+    eq_g_fr = eq_g_fr[idx_final, idx_final]
+    eq_b_fr = eq_b_fr[idx_final, idx_final]
+    eq_g_to = eq_g_to[idx_final, idx_final]
+    eq_b_to = eq_b_to[idx_final, idx_final]
+
+    branch_status = (
+        all(get(data["branch"][id], "br_status", 1) == 1 for id in branch_path if haskey(data["branch"], id)) &&
+        all(ep.status == 1 for ep in endpoints)
+    ) ? 1 : 0
+
+    new_branch_id, new_branch_idx = _next_numeric_component_id(data["branch"])
+    data["branch"][new_branch_id] = Dict{String,Any}(
+        "name" => "_virtual_branch.transformer_reduced.$group_name",
+        "source_id" => "_virtual_branch.transformer_reduced.$group_name",
+        "index" => new_branch_idx,
+        "br_status" => branch_status,
+        "f_bus" => start_ep.external_bus,
+        "t_bus" => end_ep.external_bus,
+        "f_connections" => external_common,
+        "t_connections" => external_common,
+        "br_r" => eq_r,
+        "br_x" => eq_x,
+        "g_fr" => eq_g_fr,
+        "b_fr" => eq_b_fr,
+        "g_to" => eq_g_to,
+        "b_to" => eq_b_to,
+        "angmin" => fill(-10.0, length(external_common)),
+        "angmax" => fill(10.0, length(external_common)),
+        "rate_a" => fill(Inf, length(external_common)),
+        "rate_b" => fill(Inf, length(external_common)),
+        "rate_c" => fill(Inf, length(external_common)),
+        "c_rating_a" => fill(Inf, length(external_common)),
+        "c_rating_b" => fill(Inf, length(external_common)),
+        "c_rating_c" => fill(Inf, length(external_common)),
+        "tap" => ones(length(external_common)),
+        "shift" => zeros(length(external_common)),
+        "switch" => false,
+        "transformer" => false,
+        "vbase" => vbase_target,
+    )
+
+    for tx_id in tx_ids
+        haskey(data["transformer"], tx_id) && delete!(data["transformer"], tx_id)
+    end
+
+    for br_id in group[:branches]
+        haskey(data["branch"], br_id) && delete!(data["branch"], br_id)
+    end
+
+    for bus_id in group[:buses]
+        haskey(data["bus"], bus_id) || continue
+        bus_idx = tryparse(Int, bus_id)
+        bus_idx === nothing && continue
+
+        bus_used = any((Int(br["f_bus"]) == bus_idx || Int(br["t_bus"]) == bus_idx) for (_, br) in data["branch"])
+        !bus_used && delete!(data["bus"], bus_id)
+    end
+
+    if haskey(data, "map") && isa(data["map"], AbstractVector)
+        filter!(item -> !(isa(item, Dict) && get(item, "unmap_function", "") == "_map_math2eng_transformer!" && get(item, "from", "") == group_name), data["map"])
+    end
+
+    @debug "Reduced transformer decomposition $group_name into branch $new_branch_id on vbase=$vbase_target kV."
+    return true
+end
+
+
+"""
+    reduce_network_transformers!(data::Dict; target_vbase=:higher, remove_leafnodes=true)
+
+Reduces decomposed MATHEMATICAL transformer models by collapsing each detected
+2-winding decomposition (`_virtual_transformer.*` + `_virtual_branch.transformer.*`)
+into a single equivalent branch between the two external buses.
+
+This function explicitly rebases every virtual-branch impedance/shunt from its
+local base to the selected target base before aggregation.
+
+# Arguments
+- `data::Dict`: MATHEMATICAL PMD data dictionary.
+- `target_vbase::Symbol`: Base for the equivalent branch. Options:
+  - `:higher` (default): refer all virtual impedances to the higher of the two external bus vbases.
+  - `:lower`: refer all virtual impedances to the lower external vbase.
+- `remove_leafnodes::Bool=true`: If true, runs leaf pruning and intermediate-bus cleanup after collapsing transformers.
+
+# Returns
+- The modified `data` dictionary.
+"""
+function reduce_network_transformers!(data::Dict; target_vbase::Symbol=:higher, remove_leafnodes::Bool=true)
+    @assert !haskey(data, "nw") "Multinetwork not supported in this function, apply before performing `make_multinetwork!`."
+
+    if !haskey(data, "transformer") || isempty(data["transformer"])
+        return data
+    end
+
+    groups = _collect_virtual_transformer_groups(data)
+    for (group_name, group) in groups
+        _collapse_virtual_transformer_group!(data, group_name, group; target_vbase=target_vbase)
+    end
+
+    reduce_network_intermediate_buses!(data)
+    if remove_leafnodes
+        reduce_empty_leaf_buses!(data)
+        reduce_network_intermediate_buses!(data)
+    end
+
+    return data
+end
+
+
+"""
+    reduce_network_buses_and_transformers!(data::Dict; remove_leafnodes=true, target_vbase=:higher)
+
+Runs `reduce_network_buses!` first, then additionally collapses decomposed
+transformer regions via `reduce_network_transformers!`.
+
+This is intended as a deeper MATHEMATICAL topology reduction pass where
+intermediate buses, empty leaves, and decomposed transformer internals are removed.
+"""
+function reduce_network_buses_and_transformers!(data::Dict; remove_leafnodes::Bool=true, target_vbase::Symbol=:higher)
+    reduce_network_buses!(data; remove_leafnodes=remove_leafnodes)
+    reduce_network_transformers!(data; target_vbase=target_vbase, remove_leafnodes=remove_leafnodes)
     return data
 end
 
@@ -3663,6 +4138,6 @@ export get_graph_node, get_graph_edge, create_network_graph
 
 
 export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
-export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses!, reduce_empty_leaf_buses!, reduce_network_buses!
+export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses!, reduce_empty_leaf_buses!, reduce_network_buses!, reduce_network_transformers!, reduce_network_buses_and_transformers!
 export fix_eng_directions!
 end # module PMDUtils    

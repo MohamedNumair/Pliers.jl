@@ -17,6 +17,7 @@ include("common/fixtures.jl")
         include("unit/test_io_roundtrip.jl")
         include("unit/test_parse_and_transform.jl")
         include("unit/test_graph_smoke.jl")
+        include("unit/test_math_reduction_transformers.jl")
     end
 
     @testset "Coverage Placeholders" begin
@@ -27,3 +28,7 @@ include("common/fixtures.jl")
         include("placeholders/test_io_placeholders.jl")
     end
 end
+
+
+
+
