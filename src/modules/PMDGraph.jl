@@ -2258,11 +2258,234 @@ end
 
 
 
+# ---------------------------------------------------------------------------
+# Voltage-level plotting helpers
+# ---------------------------------------------------------------------------
+
+"""
+    _get_node_vbase(node::Dict) -> Union{Float64, Symbol}
+
+Extract the base voltage from a graph node's property dictionary.
+
+Checks for `:vbase` (math model, in kV) first, then `:vm_nom` (engineering
+model fallback). Returns `:Unknown` when neither key is present.
+"""
+function _get_node_vbase(node::Dict)
+    if haskey(node, :vbase) && !ismissing(node[:vbase])
+        return Float64(node[:vbase])
+    end
+    if haskey(node, :vm_nom) && !ismissing(node[:vm_nom])
+        return Float64(node[:vm_nom])
+    end
+    return :Unknown
+end
+
+"""
+    _format_voltage_label(v) -> String
+
+Return a human-readable voltage label.
+Values ≥ 1 are assumed to be in kV; smaller values are converted to V.
+`:Unknown` is returned as `"Unknown"`.
+"""
+function _format_voltage_label(v)
+    v === :Unknown && return "Unknown"
+    v_kv = Float64(v)
+    if v_kv >= 1.0
+        return "$(round(v_kv, digits=3)) kV"
+    else
+        return "$(round(v_kv * 1000.0, digits=1)) V"
+    end
+end
+
+"""
+    _build_voltage_colormap(voltage_values) -> Dict
+
+Build a mapping from unique voltage values to distinct Makie colours.
+
+Known voltages receive colours from the Wong colour-blind-safe palette,
+cycling if there are more levels than palette entries.  `:Unknown` maps
+to `:gray`.
+"""
+function _build_voltage_colormap(voltage_values)
+    known = sort(unique([v for v in voltage_values if v !== :Unknown]))
+    palette = Makie.wong_colors()
+    color_map = Dict{Any,Any}()
+    for (i, v) in enumerate(known)
+        color_map[v] = palette[mod1(i, length(palette))]
+    end
+    if :Unknown in voltage_values
+        color_map[:Unknown] = :gray
+    end
+    return color_map
+end
+
+"""
+    _decorate_nodes_by_voltage!(network_graph, data) -> (Dict, Vector, Vector, Vector)
+
+Set `:node_color`, `:node_marker`, and `:marker_size` on every vertex of
+`network_graph` according to the bus base voltage.
+
+Returns `(voltage_color_map, node_color, node_marker, node_size)` where
+`voltage_color_map` maps each voltage value to its assigned colour.
+"""
+function _decorate_nodes_by_voltage!(network_graph::MetaDiGraph, data::Dict{String,Any})
+    all_vbase = [_get_node_vbase(node) for (_, node) in network_graph.vprops]
+    color_map = _build_voltage_colormap(all_vbase)
+
+    for (_, node) in network_graph.vprops
+        vbase = _get_node_vbase(node)
+        node[:node_color]  = color_map[vbase]
+        node[:node_marker] = :circle
+        node[:marker_size] = 10
+    end
+
+    node_color  = [props(network_graph, i)[:node_color]  for i in 1:nv(network_graph)]
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size   = [props(network_graph, i)[:marker_size]  for i in 1:nv(network_graph)]
+
+    return color_map, node_color, node_marker, node_size
+end
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+"""
+    plot_network_by_voltage(data::Dict{String,Any}; kwargs...) -> Figure
+
+Plot a network graph where **node colours reflect the base voltage level**
+(`v_base`) of each bus rather than the phase-load decoration used by
+[`plot_network_tree`](@ref).
+
+A legend mapping each colour to its voltage level (e.g. "6.6 kV", "33 kV")
+is appended to the right of the plot.  Buses without a `vbase` or `vm_nom`
+attribute are shown in gray and labelled *"Unknown"*.
+
+Edge colours still use the standard phase-based scheme from
+[`_decorate_edges!`](@ref).
+
+# Arguments
+- `data::Dict{String,Any}`: Engineering or Mathematical network model.
+- `figure_size`: Overall figure resolution in pixels. Default `(1200, 900)`.
+- `show_node_labels`: Show bus-id labels on nodes. Default `false`.
+- `show_edge_labels`: Show line-id labels on edges. Default `false`.
+- `show_load_labels`: Show load labels on nodes. Default `false`.
+- `layout`: Node layout algorithm. Default [`smart_layout`](@ref).
+- `makie_backend`: Makie backend module. Default `WGLMakie`.
+- `kwargs...`: Additional keyword arguments forwarded to `graphplot!`.
+
+# Returns
+A `Makie.Figure` containing the network plot and the voltage legend.
+
+# Example
+```julia
+using WGLMakie
+eng = PowerModelsDistribution.parse_file("network.dss")
+fig = plot_network_by_voltage(eng)
+```
+"""
+function plot_network_by_voltage(
+    data::Dict{String,Any};
+    figure_size=(1200, 900),
+    show_node_labels=false,
+    show_edge_labels=false,
+    show_load_labels=false,
+    layout=smart_layout,
+    edge_labels_type=:line_id,
+    phase="1",
+    makie_backend=WGLMakie,
+    kwargs...
+)
+    makie_backend.activate!()
+
+    # Build the network meta-graph
+    network_graph, _, _ = create_network_graph(data, layout)
+
+    # --- Labels ---
+    nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
+    elabels  = show_edge_labels ?
+        (edge_labels_type == :line_id ?
+            _write_line_id_elabels(network_graph, data) :
+            _write_results_elabels(network_graph, data, phase)) :
+        nothing
+
+    if show_load_labels
+        if show_node_labels
+            nlabels = [string(n, "\n", l) for (n, l) in zip(nlabels, lolabels)]
+        else
+            nlabels = lolabels
+        end
+    end
+
+    # --- Node decoration: voltage-based colours ---
+    color_map, node_color, node_marker, node_size =
+        _decorate_nodes_by_voltage!(network_graph, data)
+
+    # --- Edge decoration: standard phase-based colours ---
+    _decorate_edges!(network_graph, data)
+    edge_color   = [get_prop(network_graph, e, :edge_color)   for e in edges(network_graph)]
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size   = [get_prop(network_graph, e, :arrow_size)   for e in edges(network_graph)]
+    arrow_shift  = [get_prop(network_graph, e, :arrow_shift)  for e in edges(network_graph)]
+
+    # --- Build figure with legend column ---
+    fig = Figure(resolution=figure_size)
+    ax  = Axis(fig[1, 1])
+    hidedecorations!(ax)
+    hidespines!(ax)
+
+    graphplot!(
+        ax,
+        network_graph;
+        layout=layout,
+        nlabels=nlabels,
+        show_node_labels=show_node_labels || show_load_labels,
+        elabels=elabels,
+        show_edge_labels=show_edge_labels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        edge_color=edge_color,
+        arrow_show=true,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+        edge_plottype=:linesegments,
+        kwargs...
+    )
+
+    # --- Legend: sorted known voltages first, Unknown last ---
+    known_voltages = sort([v for v in keys(color_map) if v !== :Unknown])
+    sorted_voltages = vcat(known_voltages, :Unknown in keys(color_map) ? [:Unknown] : [])
+
+    legend_elements = [
+        MarkerElement(color=color_map[v], marker=:circle, markersize=15)
+        for v in sorted_voltages
+    ]
+    legend_labels = [_format_voltage_label(v) for v in sorted_voltages]
+
+    Legend(
+        fig[1, 2],
+        legend_elements,
+        legend_labels,
+        "Voltage Level";
+        framevisible=true,
+        tellheight=false,
+    )
+
+    colsize!(fig.layout, 1, Relative(0.82))
+
+    return fig
+end
+
+
 # Re-export plotting functions from parent module
 export create_graph
 export plot_network_tree, plot_network_tree!
 export plot_network_coords, plot_network_coords!
 export plot_network_map
+export plot_network_by_voltage
 export bus_phasor, bus_phasor!
 export smart_layout
 end # module PMDGraph
