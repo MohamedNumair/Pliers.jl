@@ -3026,12 +3026,13 @@ This function sequentially performs network simplification operations:
 # Arguments
 - `data::Dict`: A PowerModelsDistribution network data dictionary.
 - `remove_leafnodes::Bool`: Whether to prune empty leaf nodes (default: `true`).
+- `remove_transformers::Bool`: Whether to remove transformers (default: `true`).
 """
-function reduce_network_buses!(data::Dict; remove_leafnodes=true)
-    reduce_network_intermediate_buses!(data)
+function reduce_network_buses!(data::Dict; remove_leafnodes=true, remove_transformers=true)
+    reduce_network_intermediate_buses!(data; remove_transformers=remove_transformers)
     if remove_leafnodes
         reduce_empty_leaf_buses!(data)
-        reduce_network_intermediate_buses!(data)
+        reduce_network_intermediate_buses!(data; remove_transformers=remove_transformers)
     end
 end
 
@@ -3067,7 +3068,7 @@ The function performs the following steps:
 # Returns
 - The modified `data` dictionary with the topology simplified.
 """
-function reduce_network_intermediate_buses!(data::Dict)
+function reduce_network_intermediate_buses!(data::Dict; remove_transformers=true)
     @assert !haskey(data, "nw") "Multinetwork not supported in this function, apply before performing `make_multinetwork!`."
 
     # 1. Map Connectivity
@@ -3126,8 +3127,8 @@ function reduce_network_intermediate_buses!(data::Dict)
     gen_buses = Set(["$(g["gen_bus"])" for (_, g) in data["gen"]])
 
     # 2. Find Candidates (Degree 2, no load/gen, NOT a transformer terminal)
-    forbidden_buses = union(load_buses, gen_buses, transformer_buses, special_buses)
-    
+    forbidden_buses = union(load_buses, gen_buses, special_buses)
+    remove_transformers == true ? (forbidden_buses = union(forbidden_buses, transformer_buses)) : nothing
     candidates = String[]
     for (b, branches) in bus_to_branches
         if length(branches) == 2 && b ∉ forbidden_buses
@@ -3154,7 +3155,7 @@ function reduce_network_intermediate_buses!(data::Dict)
 
         # --- PHASE ALIGNMENT & PREPARATION ---
         conns1 = br1["f_connections"]
-        conns2 = br2["f_connections"]
+        conns2 = br2["f_connections"]   
         common = intersect(conns1, conns2)
         sort!(common)
 
