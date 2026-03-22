@@ -2258,11 +2258,441 @@ end
 
 
 
+# ---------------------------------------------------------------------------
+# Voltage-level plotting helpers
+# ---------------------------------------------------------------------------
+
+"""
+    _extract_vbase_map_eng(eng_sym::Dict) -> Dict{Symbol, Float64}
+
+Build a bus → base-voltage (kV) mapping from an engineering model.
+
+**Strategy**
+1. Read `vm_nom` from every transformer winding → direct bus-to-kV assignment.
+2. Read `vm_nom` from voltage sources (if present).
+3. Propagate known kV values through line and switch connections so that all
+   buses in the same voltage zone are labelled, not just transformer terminals.
+
+This covers the common case where engineering-model bus dicts contain no
+`vbase` or `vm_nom` key of their own.
+"""
+function _extract_vbase_map_eng(eng_sym::Dict)
+    vbase_map = Dict{Symbol,Float64}()
+
+    @debug "_extract_vbase_map_eng: building vbase map from engineering model"
+
+    # --- Step 1: Transformer windings ---
+    if haskey(eng_sym, :transformer)
+        @debug "  Found $(length(eng_sym[:transformer])) transformer(s)"
+        for (tid, trans) in eng_sym[:transformer]
+            @debug "  Transformer '$tid' keys: $(sort(string.(collect(keys(trans)))))"
+            buses   = get(trans, :bus,    String[])
+            vm_nom  = get(trans, :vm_nom, Float64[])
+            @debug "    buses=$buses  vm_nom=$vm_nom"
+            for (i, bus) in enumerate(buses)
+                if i <= length(vm_nom) && !ismissing(vm_nom[i])
+                    vbase_map[Symbol(bus)] = Float64(vm_nom[i])
+                    @debug "    → bus :$(Symbol(bus)) assigned $(vm_nom[i]) kV"
+                end
+            end
+        end
+    else
+        @debug "  No transformers found in engineering model"
+    end
+
+    # --- Step 2: Voltage sources ---
+    if haskey(eng_sym, :voltage_source)
+        @debug "  Found $(length(eng_sym[:voltage_source])) voltage source(s)"
+        for (vsid, vs) in eng_sym[:voltage_source]
+            @debug "  VoltageSource '$vsid' keys: $(sort(string.(collect(keys(vs)))))"
+            bus_id = Symbol(get(vs, :bus, ""))
+            if haskey(vs, :vm_nom) && !ismissing(vs[:vm_nom])
+                vn = vs[:vm_nom]
+                val = Float64(isa(vn, AbstractArray) ? first(vn) : vn)
+                vbase_map[bus_id] = val
+                @debug "    → source bus :$bus_id assigned $val kV from vm_nom"
+            else
+                @debug "    VoltageSource '$vsid' has no vm_nom key"
+            end
+        end
+    end
+
+    # --- Step 3: Propagate through lines (same voltage zone) ---
+    for component_key in (:line, :switch)
+        if haskey(eng_sym, component_key)
+            @debug "  Propagating through $(length(eng_sym[component_key])) $(component_key)(s)"
+            changed = true
+            pass = 0
+            while changed
+                changed = false
+                pass += 1
+                for (_, elem) in eng_sym[component_key]
+                    f = Symbol(get(elem, :f_bus, ""))
+                    t = Symbol(get(elem, :t_bus, ""))
+                    if haskey(vbase_map, f) && !haskey(vbase_map, t)
+                        vbase_map[t] = vbase_map[f]
+                        @debug "    pass $pass: :$t ← :$f ($(vbase_map[f]) kV)"
+                        changed = true
+                    elseif haskey(vbase_map, t) && !haskey(vbase_map, f)
+                        vbase_map[f] = vbase_map[t]
+                        @debug "    pass $pass: :$f ← :$t ($(vbase_map[t]) kV)"
+                        changed = true
+                    end
+                end
+            end
+        end
+    end
+
+    @debug "_extract_vbase_map_eng result: $vbase_map"
+    return vbase_map
+end
+
+
+"""
+    _extract_vbase_map_math(math_sym::Dict) -> Dict{Symbol, Float64}
+
+Build a bus → base-voltage (kV) mapping from a mathematical model.
+Math-model buses carry a `vbase` field populated by `transform_data_model`.
+"""
+function _extract_vbase_map_math(math_sym::Dict)
+    vbase_map = Dict{Symbol,Float64}()
+
+    @debug "_extract_vbase_map_math: reading vbase from math bus dicts"
+
+    if !haskey(math_sym, :bus)
+        @debug "  No :bus key in math model"
+        return vbase_map
+    end
+
+    for (bid, bus) in math_sym[:bus]
+        @debug "  Bus '$bid' keys: $(sort(string.(collect(keys(bus)))))"
+        if haskey(bus, :vbase) && !ismissing(bus[:vbase])
+            vbase_map[Symbol(bid)] = Float64(bus[:vbase])
+            @debug "    → bus :$bid vbase=$(bus[:vbase]) kV"
+        else
+            @debug "    → bus :$bid has no vbase key"
+        end
+    end
+
+    @debug "_extract_vbase_map_math result: $vbase_map"
+    return vbase_map
+end
+
+
+"""
+    _get_bus_vbase(bus_id::Symbol, vbase_map::Dict) -> Union{Float64, Symbol}
+
+Look up the base voltage for `bus_id` in `vbase_map`.
+Returns `:Unknown` when the bus is not in the map.
+"""
+function _get_bus_vbase(bus_id::Symbol, vbase_map::Dict)
+    if haskey(vbase_map, bus_id) && !ismissing(vbase_map[bus_id])
+        v = vbase_map[bus_id]
+        @debug "  _get_bus_vbase(:$bus_id) → $v kV"
+        return Float64(v)
+    end
+    @debug "  _get_bus_vbase(:$bus_id) → :Unknown (not in vbase_map)"
+    return :Unknown
+end
+
+
+"""
+    _format_voltage_label(v) -> String
+
+Return a human-readable voltage label.
+Values ≥ 1 are assumed to be in kV; smaller values are converted to V.
+`:Unknown` is returned as `"Unknown"`.
+"""
+function _format_voltage_label(v)
+    v === :Unknown && return "Unknown"
+    v_kv = Float64(v)
+    if v_kv >= 1.0
+        return "$(round(v_kv, digits=3)) kV"
+    else
+        return "$(round(v_kv * 1000.0, digits=1)) V"
+    end
+end
+
+
+"""
+    _build_voltage_colormap(voltage_values) -> Dict
+
+Build a mapping from unique voltage values to distinct Makie colours.
+
+Known voltages receive colours from the Wong colour-blind-safe palette,
+cycling if there are more levels than palette entries.  `:Unknown` maps
+to `:gray`.
+"""
+function _build_voltage_colormap(voltage_values)
+    @debug "_build_voltage_colormap: input values = $voltage_values"
+    known = sort(unique([v for v in voltage_values if v !== :Unknown]))
+    @debug "  distinct known voltages (sorted): $known"
+    palette = Makie.wong_colors()
+    color_map = Dict{Any,Any}()
+    for (i, v) in enumerate(known)
+        color_map[v] = palette[mod1(i, length(palette))]
+        @debug "  color_map[$v] = $(color_map[v])"
+    end
+    if :Unknown in voltage_values
+        color_map[:Unknown] = :gray
+        @debug "  color_map[:Unknown] = :gray"
+    end
+    @debug "_build_voltage_colormap result: $(keys(color_map))"
+    return color_map
+end
+
+
+"""
+    _decorate_nodes_by_voltage!(network_graph, data, vbase_map) -> (Dict, Vector, Vector, Vector)
+
+Set `:node_color`, `:node_marker`, and `:marker_size` on every vertex of
+`network_graph` according to the bus base voltage looked up from `vbase_map`.
+
+Returns `(voltage_color_map, node_color, node_marker, node_size)` where
+`voltage_color_map` maps each voltage value to its assigned colour.
+"""
+function _decorate_nodes_by_voltage!(
+    network_graph::MetaDiGraph,
+    data::Dict{String,Any},
+    vbase_map::Dict,
+)
+    @debug "_decorate_nodes_by_voltage!: decorating $(nv(network_graph)) nodes"
+
+    # Collect per-node vbase values keyed by vertex index for fast lookup
+    node_vbase = Dict{Int,Any}()
+    for i in 1:nv(network_graph)
+        node = props(network_graph, i)
+        bus_id = get(node, :bus_id, Symbol(""))
+        vb = _get_bus_vbase(bus_id, vbase_map)
+        node_vbase[i] = vb
+        @debug "  vertex $i (:$bus_id) → vbase = $vb"
+    end
+
+    all_vbase = collect(values(node_vbase))
+    @debug "  all collected vbase values: $all_vbase"
+    color_map = _build_voltage_colormap(all_vbase)
+
+    for i in 1:nv(network_graph)
+        node = props(network_graph, i)
+        vb = node_vbase[i]
+        node[:node_color]  = color_map[vb]
+        node[:node_marker] = :circle
+        node[:marker_size] = 10
+        @debug "  vertex $i color=$(color_map[vb])  (vbase=$vb)"
+    end
+
+    node_color  = [props(network_graph, i)[:node_color]  for i in 1:nv(network_graph)]
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size   = [props(network_graph, i)[:marker_size]  for i in 1:nv(network_graph)]
+
+    @debug "_decorate_nodes_by_voltage!: done. color_map keys = $(keys(color_map))"
+    return color_map, node_color, node_marker, node_size, node_vbase
+end
+
+
+"""
+    _decorate_edges_by_voltage!(network_graph, node_color, node_vbase, color_map)
+
+Colour each edge in `network_graph` using the voltage zone of its **source**
+vertex (`src(e)`).  Edges that cross voltage zones (transformers) use the
+source-side colour.  All arrow decorations are suppressed.
+"""
+function _decorate_edges_by_voltage!(
+    network_graph::MetaDiGraph,
+    node_color::Vector,
+    node_vbase::Dict,
+    color_map::Dict,
+)
+    @debug "_decorate_edges_by_voltage!: decorating $(ne(network_graph)) edges"
+
+    for e in edges(network_graph)
+        s = src(e)
+        d = dst(e)
+        src_vb  = get(node_vbase, s, :Unknown)
+        dst_vb  = get(node_vbase, d, :Unknown)
+        src_col = node_color[s]
+
+        if src_vb != dst_vb
+            @debug "  edge ($s→$d): crosses voltage zones ($src_vb kV → $dst_vb kV), using src colour"
+        else
+            @debug "  edge ($s→$d): same zone ($src_vb kV)"
+        end
+
+        set_prop!(network_graph, e, :edge_color,   src_col)
+        set_prop!(network_graph, e, :arrow_show,   false)
+        set_prop!(network_graph, e, :arrow_marker, '⠀')
+        set_prop!(network_graph, e, :arrow_size,   0)
+        set_prop!(network_graph, e, :arrow_shift,  0.5)
+    end
+end
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+"""
+    plot_network_by_voltage(data::Dict{String,Any}; kwargs...) -> Figure
+
+Plot a network graph where **node and edge colours reflect the base voltage
+level** (`v_base`) of each bus, rather than the phase-load decoration used
+by [`plot_network_tree`](@ref).
+
+A legend mapping each colour to its voltage level (e.g. "0.4 kV", "11 kV")
+is appended to the right of the plot.  Buses without a detectable `vbase`
+are shown in gray and labelled *"Unknown"*.
+
+Both engineering model (`data_model = ENGINEERING`) and mathematical model
+(`data_model = MATHEMATICAL`) are supported.  For the engineering model the
+voltage base is inferred from transformer `vm_nom` fields and propagated
+through line connections.  For the mathematical model it is read directly
+from the `vbase` field of each bus.
+
+Enables `@debug` logging (`ENV["JULIA_DEBUG"] = "Pliers"` or
+`Logging.with_logger(Logging.ConsoleLogger(stderr, Logging.Debug))`) to
+inspect per-bus vbase resolution.
+
+# Arguments
+- `data::Dict{String,Any}`: Engineering or Mathematical network model.
+- `figure_size`: Overall figure resolution in pixels. Default `(1200, 900)`.
+- `show_node_labels`: Show bus-id labels on nodes. Default `false`.
+- `show_edge_labels`: Show line-id labels on edges. Default `false`.
+- `show_load_labels`: Show load labels on nodes. Default `false`.
+- `layout`: Node layout algorithm. Default [`smart_layout`](@ref).
+- `makie_backend`: Makie backend module. Default `WGLMakie`.
+- `kwargs...`: Additional keyword arguments forwarded to `graphplot!`.
+
+# Returns
+A `Makie.Figure` containing the network plot and the voltage legend.
+
+# Example
+```julia
+using WGLMakie
+using Logging
+# optional: enable debug output
+Logging.global_logger(Logging.ConsoleLogger(stderr, Logging.Debug))
+
+eng = PowerModelsDistribution.parse_file("network.dss")
+fig = plot_network_by_voltage(eng)
+```
+"""
+function plot_network_by_voltage(
+    data::Dict{String,Any};
+    figure_size=(1200, 900),
+    show_node_labels=false,
+    show_edge_labels=false,
+    show_load_labels=false,
+    layout=smart_layout,
+    edge_labels_type=:line_id,
+    phase="1",
+    makie_backend=WGLMakie,
+    kwargs...
+)
+    makie_backend.activate!()
+
+    @debug """plot_network_by_voltage: data_model=$(get(data, "data_model", "(unknown)"))"""
+    # --- Build the network meta-graph ---
+    network_graph, _, _ = create_network_graph(data, layout)
+    @debug "  graph: $(nv(network_graph)) vertices, $(ne(network_graph)) edges"
+
+    # --- Build vbase map depending on model type ---
+    data_sym = convert_keys_to_symbols(data)
+    if _is_eng(data)
+        @debug "  Using engineering-model vbase extraction"
+        vbase_map = _extract_vbase_map_eng(data_sym)
+    else
+        @debug "  Using mathematical-model vbase extraction"
+        vbase_map = _extract_vbase_map_math(data_sym)
+    end
+
+    @debug "  vbase_map ($(length(vbase_map)) entries): $vbase_map"
+
+    # --- Labels ---
+    nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
+    lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
+    elabels  = show_edge_labels ?
+        (edge_labels_type == :line_id ?
+            _write_line_id_elabels(network_graph, data) :
+            _write_results_elabels(network_graph, data, phase)) :
+        nothing
+
+    if show_load_labels
+        if show_node_labels
+            nlabels = [string(n, "\n", l) for (n, l) in zip(nlabels, lolabels)]
+        else
+            nlabels = lolabels
+        end
+    end
+
+    # --- Node decoration: voltage-based colours ---
+    color_map, node_color, node_marker, node_size, node_vbase =
+        _decorate_nodes_by_voltage!(network_graph, data, vbase_map)
+
+    # --- Edge decoration: voltage-zone colours (matches node colour) ---
+    _decorate_edges_by_voltage!(network_graph, node_color, node_vbase, color_map)
+    edge_color   = [get_prop(network_graph, e, :edge_color)   for e in edges(network_graph)]
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size   = [get_prop(network_graph, e, :arrow_size)   for e in edges(network_graph)]
+    arrow_shift  = [get_prop(network_graph, e, :arrow_shift)  for e in edges(network_graph)]
+
+    # --- Build figure with legend column ---
+    fig = Figure(size=figure_size)
+    ax  = Axis(fig[1, 1])
+
+    graphplot!(
+        ax,
+        network_graph;
+        layout=layout,
+        nlabels=nlabels,
+        show_node_labels=show_node_labels || show_load_labels,
+        elabels=elabels,
+        show_edge_labels=show_edge_labels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        edge_color=edge_color,
+        arrow_show=true,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+        edge_plottype=:linesegments,
+        kwargs...
+    )
+
+    # --- Legend: sorted known voltages first, Unknown last ---
+    known_voltages  = sort([v for v in keys(color_map) if v !== :Unknown])
+    has_unknown     = :Unknown in keys(color_map)
+    sorted_voltages = vcat(known_voltages, has_unknown ? [:Unknown] : [])
+
+    legend_elements = [
+        MarkerElement(color=color_map[v], marker=:circle, markersize=15)
+        for v in sorted_voltages
+    ]
+    legend_labels = [_format_voltage_label(v) for v in sorted_voltages]
+
+    @debug "  legend entries: $(collect(zip(legend_labels, sorted_voltages)))"
+
+    Legend(
+        fig[1, 2],
+        legend_elements,
+        legend_labels,
+        "Voltage Level";
+        framevisible=true,
+        tellheight=false,
+    )
+
+    colsize!(fig.layout, 1, Relative(0.82))
+
+    return fig
+end
+
+
 # Re-export plotting functions from parent module
 export create_graph
 export plot_network_tree, plot_network_tree!
 export plot_network_coords, plot_network_coords!
 export plot_network_map
+export plot_network_by_voltage
 export bus_phasor, bus_phasor!
 export smart_layout
 end # module PMDGraph
