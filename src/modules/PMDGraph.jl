@@ -2590,8 +2590,7 @@ function plot_network_by_voltage(
 )
     makie_backend.activate!()
 
-    @debug "plot_network_by_voltage: data_model=$(get(data, \"data_model\", \"(unknown)\"))"
-
+    @debug """plot_network_by_voltage: data_model=$(get(data, "data_model", "(unknown)"))"""
     # --- Build the network meta-graph ---
     network_graph, _, _ = create_network_graph(data, layout)
     @debug "  graph: $(nv(network_graph)) vertices, $(ne(network_graph)) edges"
@@ -2637,10 +2636,8 @@ function plot_network_by_voltage(
     arrow_shift  = [get_prop(network_graph, e, :arrow_shift)  for e in edges(network_graph)]
 
     # --- Build figure with legend column ---
-    fig = Figure(resolution=figure_size)
+    fig = Figure(size=figure_size)
     ax  = Axis(fig[1, 1])
-    hidedecorations!(ax)
-    hidespines!(ax)
 
     graphplot!(
         ax,
