@@ -158,6 +158,22 @@ Technical areas relevant to this codebase:
 
 **Standards**: IEC 60076 (power transformers), IEC 61850 (substation communication), IEC 61968/61970 (CIM), IEC 60038 (standard voltages), EN 50160 (voltage quality), IEEE 1547, IEEE C57 series
 
+## PMD Enum Constants — Never Use Bare Names
+
+Pliers does **not** import PMD constants (`MATHEMATICAL`, `ENGINEERING`, `DELTA`, `WYE`, etc.) into its module scope. Using them bare causes `UndefVarError`. Always compare via string:
+
+```julia
+# CORRECT
+string(data["data_model"]) == "MATHEMATICAL"
+string(load["configuration"]) == "DELTA"
+
+# WRONG — UndefVarError at runtime
+data["data_model"] == MATHEMATICAL
+load["configuration"] == DELTA
+```
+
+This applies everywhere in `PMDUtils`, `PMDGraph`, and any other Pliers module.
+
 ## Graph Visualization Internals (PMDGraph)
 
 - **Transformer directionality in MATH**: Components named `_virtual_branch..._2` or `_virtual_transformer...2` are reverse-directed. Flip `f_bus`/`t_bus` for names starting with `_virtual_branch`/`_virtual_transformer` AND ending with `_2`/`.2`.

@@ -2422,10 +2422,10 @@ function write_delta_readings(pf_sol, math, math_meas)
     #     end
     #     bus["vmn"] = sqrt.(bus["vmn2"])
     # math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], 4)
-    # end 
+    # end
 
     for (l, load) in math["load"]
-        if load["configuration"] == DELTA
+        if string(load["configuration"]) == "DELTA"
             pf_sol["load"][l]["ptot"] = [sum(pf_sol["load"][l]["pd"])]
             pf_sol["load"][l]["qtot"] = [sum(pf_sol["load"][l]["qd"])]
 
@@ -2457,10 +2457,10 @@ function write_delta_readings(pf_sol,math)
         end
         bus["vmn"] = sqrt.(bus["vmn2"])
     math_meas["bus"][b]["terminals"] = setdiff(math["bus"][b]["terminals"], 4)
-    end 
+    end
 
     for (l, load) in math["load"]
-    if load["configuration"] == DELTA
+    if string(load["configuration"]) == "DELTA"
         pf_sol["load"][l]["ptot"] = [sum(pf_sol["load"][l]["pd"])]
         pf_sol["load"][l]["qtot"] = [sum(pf_sol["load"][l]["qd"])]
 
@@ -3015,24 +3015,29 @@ end
 
 
 """
-    reduce_network_buses!(data::Dict; remove_leafnodes=true)
+    reduce_network_buses!(data::Dict; remove_leafnodes=true, protect_transformers=true)
 
 Reduces the PowerModelsDistribution network data model by removing redundant buses.
+
+**Requires**: MATHEMATICAL model (`data["data_model"] == MATHEMATICAL`) in per-unit (`data["per_unit"] == true`).
 
 This function sequentially performs network simplification operations:
 1.  Calls `reduce_network_intermediate_buses!` to merge buses with degree of 2 (connecting exactly two branches) that have no other attached components.
 2.  If `remove_leafnodes` is true (default), it calls `reduce_empty_leaf_buses!` to remove dead-end buses with no load or generation, followed by another pass of `reduce_network_intermediate_buses!` to cleanup any new intermediate nodes created by the leaf removal.
 
 # Arguments
-- `data::Dict`: A PowerModelsDistribution network data dictionary.
+- `data::Dict`: A PowerModelsDistribution MATHEMATICAL network data dictionary (per-unit).
 - `remove_leafnodes::Bool`: Whether to prune empty leaf nodes (default: `true`).
-- `remove_transformers::Bool`: Whether to remove transformers (default: `true`).
+- `protect_transformers::Bool`: Whether to protect transformer terminal buses from being merged
+  (default: `true`). Set to `false` to allow merging of intermediate virtual buses inside the
+  transformer loss model — this is electrically valid only when the merged branches share the same
+  voltage base, which is checked and enforced automatically.
 """
-function reduce_network_buses!(data::Dict; remove_leafnodes=true, remove_transformers=true)
-    reduce_network_intermediate_buses!(data; remove_transformers=remove_transformers)
+function reduce_network_buses!(data::Dict; remove_leafnodes=true, protect_transformers=true)
+    reduce_network_intermediate_buses!(data; protect_transformers=protect_transformers)
     if remove_leafnodes
         reduce_empty_leaf_buses!(data)
-        reduce_network_intermediate_buses!(data; remove_transformers=remove_transformers)
+        reduce_network_intermediate_buses!(data; protect_transformers=protect_transformers)
     end
 end
 
@@ -3045,31 +3050,39 @@ end
 
 
 """
-    reduce_network_intermediate_buses!(data::Dict)
+    reduce_network_intermediate_buses!(data::Dict; protect_transformers=true)
 
-Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing intermediate buses that have no load, no generation, and a degree of 2 or less (i.e., simple pass-through nodes).
+Simplifies a PowerModelsDistribution MATHEMATICAL network dictionary by removing intermediate buses that have no load, no generation, and a degree of exactly 2 (simple pass-through nodes).
+
+**Requires**: MATHEMATICAL model in per-unit (checked at entry).
 
 # Arguments
-- `data`: A dictionary containing MATHEMATICAL network data, specifically requiring "bus" and "branch" dictionaries.
+- `data`: A dictionary containing MATHEMATICAL network data (per-unit), requiring "bus" and "branch".
+- `protect_transformers::Bool`: When `true` (default), transformer terminal buses (both sides of every
+  ideal `_virtual_transformer` entry in `data["transformer"]`) are excluded from the candidate set and
+  will never be merged. When `false`, those buses may be merged if they are otherwise degree-2 with no
+  load/gen. In this case the impedance merge automatically refers both branches to a common voltage base
+  using each branch's `vbase` field; if `vbase` is missing on either branch the merge is skipped with a
+  warning to avoid silent per-unit errors.
 
 # Functionality
-The function performs the following steps:
-1.  **Validation**: Checks that the dictionary is not a multi-network structure.
-2.  **Bus Classification**: Identifies load buses, generation buses, transformer buses and other special buses.
+1.  **Validation**: Ensures single-network, MATHEMATICAL model, per-unit data.
+2.  **Bus Classification**: Identifies load buses, generation buses, transformer terminal buses, and special (slack/virtual-reference) buses.
 3.  **Topology Analysis**: Calculates the degree of all buses.
 4.  **Reduction Loop**:
-    - Identifies candidate buses for deletion (non-load, non-gen, degree == 2).
-    - Iteratively merges branches connected to these buses.
-    - Updates the resistance (`br_r`) and reactance (`br_x`) of the preserved branch by summing the values of the merged branches.
+    - Identifies candidate buses for deletion (non-load, non-gen, degree == 2, not forbidden).
+    - Merges branches connected to each candidate, summing series impedance (with per-unit base conversion when `protect_transformers=false`).
     - Updates connectivity (from/to bus indices) to bypass the deleted bus.
-    - Deletes the superfluous bus and the redundant branch.
-5.  **Reorientation**: Ensures that the branch connected to the reference bus (slack bus, type 3) is oriented such that `f_bus` is the reference bus.
+    - Deletes the redundant bus and branch.
+5.  **Reorientation**: Ensures the branch at the reference bus (type 3) is oriented `f_bus → network`.
 
 # Returns
-- The modified `data` dictionary with the topology simplified.
+- The modified `data` dictionary.
 """
-function reduce_network_intermediate_buses!(data::Dict; remove_transformers=true)
+function reduce_network_intermediate_buses!(data::Dict; protect_transformers=true)
     @assert !haskey(data, "nw") "Multinetwork not supported in this function, apply before performing `make_multinetwork!`."
+    @assert string(get(data, "data_model", nothing)) == "MATHEMATICAL" "reduce_network_intermediate_buses! requires a MATHEMATICAL model. Got: " * string(get(data, "data_model", "unknown")) * "."
+    @assert get(data, "per_unit", false) "reduce_network_intermediate_buses! requires per-unit data (data[per_unit] must be true)."
 
     # 1. Map Connectivity
     bus_to_branches = Dict(b => String[] for b in keys(data["bus"]))
@@ -3128,7 +3141,9 @@ function reduce_network_intermediate_buses!(data::Dict; remove_transformers=true
 
     # 2. Find Candidates (Degree 2, no load/gen, NOT a transformer terminal)
     forbidden_buses = union(load_buses, gen_buses, special_buses)
-    remove_transformers == true ? (forbidden_buses = union(forbidden_buses, transformer_buses)) : nothing
+    if protect_transformers
+        forbidden_buses = union(forbidden_buses, transformer_buses)
+    end
     candidates = String[]
     for (b, branches) in bus_to_branches
         if length(branches) == 2 && b ∉ forbidden_buses
