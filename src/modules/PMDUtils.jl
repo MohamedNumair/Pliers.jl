@@ -3155,9 +3155,13 @@ function reduce_network_intermediate_buses!(data::Dict; remove_transformers=true
 
         # --- PHASE ALIGNMENT & PREPARATION ---
         conns1 = br1["f_connections"]
+        @debug "coons1: " * string(conns1)
         conns2 = br2["f_connections"]   
+        @debug "coons2: " * string(conns2)
         common = intersect(conns1, conns2)
+        @debug "common connections: " * string(common)
         sort!(common)
+        @debug "sorted common connections: " * string(common)
 
         if isempty(common)
              @warn "No common phases between branches $(id1) and $(id2) at bus $(db). Skipping merge."
