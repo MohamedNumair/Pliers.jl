@@ -186,7 +186,7 @@ end
 
 function viz_residuals(SE_en, math_en, PF_en; show_legend=false, kwargs...)
 
-    MAPE, APEs_df, _ = Pliers._calculate_MAPE(SE_en, PF_en, math_en)
+    MAPE, APEs_df, _ = _calculate_MAPE(SE_en, PF_en, math_en)
     MAPE_N, _ , _ = _calculate_MAPE_toNeutral(SE_en, PF_en, math_en)
     viz_residuals(SE_en, math_en; show_legend = show_legend, mape = MAPE, APEs_df = APEs_df, MAPE_N=MAPE_N, kwargs...)
 
@@ -348,7 +348,7 @@ function math_meas_table(math::Dict{String, Any}, condition::Function; se_sol= n
         [ "cmp"  "cmp_id"  "var"  "crit "  "res"]
      )
      pretty_table(meas_df, header= headers)
-    extra_keys(meass, ["cmp", "cmp_id", "var", "crit", "res"])
+    extra_keys(meass, ["cmp", "cmp_id", "var", "crit", "res"])#
         
 end
 
@@ -518,6 +518,70 @@ function _calculate_MAPE_toNeutral(SE_RES, PF_RES, math)
     return mean_APE, APEs_df, Errors_df
 
 end
+
+function _calculate_MAPE_P_Q(SE_RES, PF_RES, math; element = "load", quantity = "power")
+
+    se_sol  = deepcopy(SE_RES["solution"])
+    pf_sol = deepcopy(PF_RES["solution"])
+
+    dictify_solution!(pf_sol, math)
+    dictify_solution!(se_sol, math)
+
+    P_APEs = [] 
+    Q_APEs = []
+    Errors = [] 
+
+    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
+    P_APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
+    Q_APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
+    for (b,Component) in se_sol[element]
+
+        for (term,Sse) in Component[quantity] 
+            if term == "4"
+                continue
+            end
+
+            Spf = pf_sol[element][b][quantity*"_bus"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
+
+            Ppf = real(Spf)
+            Qpf = imag(Spf)
+
+            Pse = real(Sse)
+            Qse = imag(Sse)
+
+            P_APE = (abs(abs(Pse) - abs(Ppf)) / abs(Ppf) ) * 100
+            if P_APE > 100
+                warning_text("High P_APE detected at Bus: $b, Terminal: $term, Pse: $Pse, Ppf: $Ppf, Sse: $Sse, Spf: $Spf")
+            end
+            Q_APE = (abs(abs(Qse) - abs(Qpf)) / abs(Qpf) ) * 100
+
+            Error = Sse - Spf
+            
+            push!(P_APEs,P_APE)
+            push!(Q_APEs,Q_APE)
+
+            push!(Errors,Error)
+
+
+            push!(P_APEs_df, (b, term, P_APE))
+            push!(Q_APEs_df, (b, term, Q_APE))
+            push!(Errors_df, (b, term, Error))
+
+        end
+
+    end
+
+    P_APEs_nonan = filter(x -> !isnan(x), P_APEs)
+    Q_APEs_nonan = filter(x -> !isnan(x), Q_APEs)
+    
+    mean_P_APE = mean(P_APEs_nonan)
+    mean_Q_APE = mean(Q_APEs_nonan)
+
+
+    return mean_P_APE, P_APEs_df, mean_Q_APE, Q_APEs_df, Errors_df
+
+end
+
 
 """
     generate_meas_est_table(se_results, math)
