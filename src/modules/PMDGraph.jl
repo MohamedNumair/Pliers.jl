@@ -1287,6 +1287,8 @@ function plot_network_tree(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
+    show_transformer_labels=false,
+    show_switch_labels=false,
     show_load_labels=false,
     layout=smart_layout,
     edge_labels_type=:line_id,
@@ -1299,7 +1301,15 @@ function plot_network_tree(
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
-    elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+    elabels = _resolve_edge_labels(
+        network_graph,
+        data,
+        show_edge_labels=show_edge_labels,
+        edge_labels_type=edge_labels_type,
+        phase=phase,
+        show_transformer_labels=show_transformer_labels,
+        show_switch_labels=show_switch_labels,
+    )
 
     if show_load_labels
         if show_node_labels
@@ -1332,7 +1342,7 @@ function plot_network_tree(
         figure_size=figure_size,
         show_node_labels=show_node_labels || show_load_labels,
         nlabels=nlabels,
-        show_edge_labels=show_edge_labels,
+        show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
         elabels=elabels,
         node_color=node_color,
         node_marker=node_marker,
@@ -1377,6 +1387,8 @@ function plot_network_tree!(
     figure_size=(1000, 1200),
     show_node_labels=false,
     show_edge_labels=false,
+    show_transformer_labels=false,
+    show_switch_labels=false,
     show_load_labels=false,
     layout=smart_layout,
     edge_labels_type=:line_id,
@@ -1389,7 +1401,15 @@ function plot_network_tree!(
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
-    elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+    elabels = _resolve_edge_labels(
+        network_graph,
+        data,
+        show_edge_labels=show_edge_labels,
+        edge_labels_type=edge_labels_type,
+        phase=phase,
+        show_transformer_labels=show_transformer_labels,
+        show_switch_labels=show_switch_labels,
+    )
 
     if show_load_labels
         if show_node_labels
@@ -1423,7 +1443,7 @@ function plot_network_tree!(
         figure_size=figure_size,
         show_node_labels=show_node_labels || show_load_labels,
         nlabels=nlabels,
-        show_edge_labels=show_edge_labels,
+        show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
         elabels=elabels,
         node_color=node_color,
         node_marker=node_marker,
@@ -1486,6 +1506,8 @@ function plot_network_coords(
     data::Dict{String,Any};
     show_node_labels=false,
     show_edge_labels=false,
+    show_transformer_labels=false,
+    show_switch_labels=false,
     show_load_labels=false,
     fallback_layout=smart_layout,
     edge_labels_type=:line_id,
@@ -1498,7 +1520,15 @@ function plot_network_coords(
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
-    elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+    elabels = _resolve_edge_labels(
+        network_graph,
+        data,
+        show_edge_labels=show_edge_labels,
+        edge_labels_type=edge_labels_type,
+        phase=phase,
+        show_transformer_labels=show_transformer_labels,
+        show_switch_labels=show_switch_labels,
+    )
 
     if show_load_labels
         if show_node_labels
@@ -1534,7 +1564,7 @@ function plot_network_coords(
         node_color=node_color,
         node_marker=node_marker,
         node_size=node_size,
-        show_edge_labels=show_edge_labels,
+        show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
         elabels=elabels,
         edge_color=edge_color,
         arrow_show=arrow_show,
@@ -1549,8 +1579,11 @@ function plot_network_coords!(
     data::Dict{String,Any};
     show_node_labels=false,
     show_edge_labels=false,
+    show_transformer_labels=false,
+    show_switch_labels=false,
     fallback_layout=smart_layout,
     edge_labels_type=:line_id,
+    phase="1",
     kwargs...
 )
 
@@ -1558,7 +1591,15 @@ function plot_network_coords!(
 
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
-    elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+    elabels = _resolve_edge_labels(
+        network_graph,
+        data,
+        show_edge_labels=show_edge_labels,
+        edge_labels_type=edge_labels_type,
+        phase=phase,
+        show_transformer_labels=show_transformer_labels,
+        show_switch_labels=show_switch_labels,
+    )
 
     # FORCED NODE FORMATTING:   
     _decorate_nodes!(network_graph, data)
@@ -1581,7 +1622,7 @@ function plot_network_coords!(
         node_color=node_color,
         node_marker=node_marker,
         node_size=node_size,
-        show_edge_labels=show_edge_labels,
+        show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
         elabels=elabels,
         edge_color=edge_color,
         arrow_show=arrow_show,
@@ -1638,6 +1679,8 @@ function plot_network_map(
     data::Dict{String,Any};
     show_node_labels=false,
     show_edge_labels=false,
+    show_transformer_labels=false,
+    show_switch_labels=false,
     show_load_labels=false,
     edge_labels_type=:line_id,
     phase="1",
@@ -1648,7 +1691,15 @@ function plot_network_map(
     # Handle labels if required
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
-    elabels = show_edge_labels ? edge_labels_type == :line_id ? _write_line_id_elabels(network_graph, data) : _write_results_elabels(network_graph, data, phase) : nothing
+    elabels = _resolve_edge_labels(
+        network_graph,
+        data,
+        show_edge_labels=show_edge_labels,
+        edge_labels_type=edge_labels_type,
+        phase=phase,
+        show_transformer_labels=show_transformer_labels,
+        show_switch_labels=show_switch_labels,
+    )
 
     if show_load_labels
         if show_node_labels
@@ -1661,7 +1712,17 @@ function plot_network_map(
 
     if !isa(GraphLayout, Function)
         @warn "You are attempting to plot a network without coordinates on the map, that is not possible, instead the network tree graph will be plotted"
-        return plot_network_coords(data, show_node_labels=show_node_labels, show_edge_labels=show_edge_labels, kwargs...)
+        return plot_network_coords(
+            data,
+            show_node_labels=show_node_labels,
+            show_edge_labels=show_edge_labels,
+            show_transformer_labels=show_transformer_labels,
+            show_switch_labels=show_switch_labels,
+            show_load_labels=show_load_labels,
+            edge_labels_type=edge_labels_type,
+            phase=phase,
+            kwargs...
+        )
     else
         @info "Plotting network map with coordinates on the map -- it is your responsibility to ensure the coordinates are at the correct place"
         _decorate_nodes!(network_graph, data)
@@ -1684,7 +1745,7 @@ function plot_network_map(
             nlabels=nlabels,
             elabels=elabels,
             show_node_labels=show_node_labels || show_load_labels,
-            show_edge_labels=show_edge_labels,
+            show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
             node_color=node_color,
             node_marker=node_marker,
             node_size=node_size,
@@ -2208,6 +2269,100 @@ function _write_line_id_elabels(network_graph, data)
 end
 
 
+function _is_switch_edge(edge_props)
+    return haskey(edge_props, :is_switch) && edge_props[:is_switch]
+end
+
+
+function _is_transformer_edge(edge_props, data)
+    if _is_switch_edge(edge_props)
+        return false
+    end
+
+    if !_is_eng(data)
+        return haskey(edge_props, :is_transformer) && edge_props[:is_transformer]
+    end
+
+    return !haskey(edge_props, :t_connections)
+end
+
+
+function _edge_display_name(edge_props, data)
+    if haskey(edge_props, :name)
+        return string(edge_props[:name])
+    end
+
+    if _is_eng(data)
+        return haskey(edge_props, :line_id) ? string(edge_props[:line_id]) : ""
+    end
+
+    return haskey(edge_props, :branch_id) ? string(edge_props[:branch_id]) : ""
+end
+
+
+function _write_transformer_elabels(network_graph, data)
+    labels = Vector{String}(undef, ne(network_graph))
+    for (i, e) in enumerate(edges(network_graph))
+        edge_props = props(network_graph, e)
+        labels[i] = _is_transformer_edge(edge_props, data) ? _edge_display_name(edge_props, data) : ""
+    end
+    return labels
+end
+
+
+function _write_switch_elabels(network_graph, data)
+    labels = Vector{String}(undef, ne(network_graph))
+    for (i, e) in enumerate(edges(network_graph))
+        edge_props = props(network_graph, e)
+        labels[i] = _is_switch_edge(edge_props) ? _edge_display_name(edge_props, data) : ""
+    end
+    return labels
+end
+
+
+function _append_nonempty_labels!(labels::Vector{String}, add_labels::Vector{String})
+    for i in eachindex(labels)
+        if !isempty(add_labels[i])
+            labels[i] = isempty(labels[i]) ? add_labels[i] : string(labels[i], "\n", add_labels[i])
+        end
+    end
+end
+
+
+function _resolve_edge_labels(
+    network_graph,
+    data;
+    show_edge_labels=false,
+    edge_labels_type=:line_id,
+    phase="1",
+    show_transformer_labels=false,
+    show_switch_labels=false,
+)
+    if !(show_edge_labels || show_transformer_labels || show_switch_labels)
+        return nothing
+    end
+
+    labels = fill("", ne(network_graph))
+
+    if show_edge_labels
+        base_labels = edge_labels_type == :line_id ?
+                      _write_line_id_elabels(network_graph, data) :
+                      _write_results_elabels(network_graph, data, phase)
+        _append_nonempty_labels!(labels, base_labels)
+    end
+
+    if show_transformer_labels
+        _append_nonempty_labels!(labels, _write_transformer_elabels(network_graph, data))
+    end
+
+    if show_switch_labels
+        _append_nonempty_labels!(labels, _write_switch_elabels(network_graph, data))
+    end
+
+    return labels
+end
+
+
 function _check_bases(eng_res::Dict{String,Any})
     if haskey(eng_res, "bases")
         return eng_res["bases"]["is_perunit"], eng_res["bases"]["vbase_V"], eng_res["bases"]["sbase_VA"], eng_res["bases"]["Zbase_Ω"], eng_res["bases"]["Ibase_A"]
@@ -2581,6 +2736,8 @@ function plot_network_by_voltage(
     figure_size=(1200, 900),
     show_node_labels=false,
     show_edge_labels=false,
+    show_transformer_labels=false,
+    show_switch_labels=false,
     show_load_labels=false,
     layout=smart_layout,
     edge_labels_type=:line_id,
@@ -2610,11 +2767,15 @@ function plot_network_by_voltage(
     # --- Labels ---
     nlabels = show_node_labels ? _write_nlabels(network_graph, data) : nothing
     lolabels = show_load_labels ? _write_lolabels(network_graph, data) : nothing
-    elabels  = show_edge_labels ?
-        (edge_labels_type == :line_id ?
-            _write_line_id_elabels(network_graph, data) :
-            _write_results_elabels(network_graph, data, phase)) :
-        nothing
+    elabels = _resolve_edge_labels(
+        network_graph,
+        data,
+        show_edge_labels=show_edge_labels,
+        edge_labels_type=edge_labels_type,
+        phase=phase,
+        show_transformer_labels=show_transformer_labels,
+        show_switch_labels=show_switch_labels,
+    )
 
     if show_load_labels
         if show_node_labels
@@ -2646,7 +2807,7 @@ function plot_network_by_voltage(
         nlabels=nlabels,
         show_node_labels=show_node_labels || show_load_labels,
         elabels=elabels,
-        show_edge_labels=show_edge_labels,
+        show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
         node_color=node_color,
         node_marker=node_marker,
         node_size=node_size,
