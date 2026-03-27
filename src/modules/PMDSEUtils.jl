@@ -13,6 +13,7 @@ See the main Pliers module for function documentation.
 module PMDSEUtils
 
 using ..Pliers
+using ..Pliers: warning_text, header, extra_keys
 using ..Pliers.PMDUtils: dictify_solution!, add_vmn_p_q
 
 
