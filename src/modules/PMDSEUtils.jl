@@ -731,7 +731,9 @@ function _get_node_positions(network_graph, layout_fn)
     bus_positions = Dict{String, Tuple{Float64, Float64}}()
     for v in vertices(network_graph)
         bus_id = string(get_prop(network_graph, v, :bus_id))
-        bus_positions[bus_id] = positions[v]
+        # Handle cases where layout_fn returns Point2f/Point2 instead of Tuple
+        pos = positions[v]
+        bus_positions[bus_id] = (Float64(pos[1]), Float64(pos[2]))
     end
     return bus_positions
 end
