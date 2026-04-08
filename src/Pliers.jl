@@ -97,7 +97,7 @@ include("io/util-spanish-networks.jl")
 
 # Sub-modules for organized namespace
 include("modules/PMDUtils.jl")
-include("modules/PMDSEUtils.jl")
 include("modules/PMDGraph.jl")
+include("modules/PMDSEUtils.jl")
 
 end # module Pliers
