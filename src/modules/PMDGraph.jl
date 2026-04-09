@@ -1725,7 +1725,7 @@ function plot_network_map(
             kwargs...
         )
     else
-        @info "Plotting network map with coordinates on the map -- it is your responsibility to ensure the coordinates are at the correct place"
+        @info "Plotting network map with coordinates on the map"
         _decorate_nodes!(network_graph, data)
         node_color = [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)]
         node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
