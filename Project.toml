@@ -24,12 +24,14 @@ Proj = "c94c279d-25a6-4763-9509-64d165bea63e"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
+Tyler = "e170d443-b9d6-418a-9ee8-061e966341ef"
 WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 
 [compat]
 JLD2 = "0.6.4"
 Serialization = "1.11.0"
 Suppressor = "0.2.8"
+Tyler = "0.2.5"
 
 [extras]
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"

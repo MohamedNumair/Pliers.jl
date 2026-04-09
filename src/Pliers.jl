@@ -34,6 +34,7 @@ using Makie
 # using MakieCore
 using CairoMakie
 using WGLMakie
+using Tyler
 if Sys.iswindows()
     # using GLMakie
 end
