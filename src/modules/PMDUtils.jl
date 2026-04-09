@@ -592,12 +592,18 @@ function linecodes_table(eng::Dict{String,Any})
         c = c + 1
         sub_header("$(c) - Linecode: $(linecode_id)")
 
-        for (key, matrix) in linecode
+        for (key, val) in linecode
             sub_sub_header("$(linecode_id) - ($key) :")
             try
-                _pretty_diag_matrix(matrix::Matrix)
+                if isa(val, Matrix)
+                    _pretty_diag_matrix(val)
+                elseif isa(val, Vector)
+                    println("Vector: ", val)
+                else
+                    println(val)
+                end
             catch e
-                error_text("parsing the $key it might not be a matrix: $(e)")
+                error_text("parsing the $key: $(e)")
             end
 
         end
@@ -614,12 +620,18 @@ function linecode_table(eng::Dict{String,Any}, linecodes)
         c = c + 1
         sub_header("$(c) - Linecode: $(linecode_id)")
 
-        for (key, matrix) in eng["linecode"][linecode_id]
+        for (key, val) in eng["linecode"][linecode_id]
             sub_sub_header("$(linecode_id) - ($key) :")
             try
-                _pretty_diag_matrix(matrix::Matrix)
+                if isa(val, Matrix)
+                    _pretty_diag_matrix(val)
+                elseif isa(val, Vector)
+                    println("Vector: ", val)
+                else
+                    println(val)
+                end
             catch e
-                error_text("parsing the $key it might not be a matrix: $(e)")
+                error_text("parsing the $key: $(e)")
             end
 
         end

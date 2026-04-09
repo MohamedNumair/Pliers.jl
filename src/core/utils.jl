@@ -133,14 +133,20 @@ Displays the matrix with row indices prepended and highlights:
 - Row labels in bold
 """
 function _pretty_diag_matrix(mat::Matrix)
-    isa(mat, Array) || error("The $key is not a matrix")
-            mx = deepcopy(mat)
-            mx = hcat([range(1, size(mx,1))...], mx)
-            pretty_table(mx,
-                         header=[range(0, size(mx,2)-1)...],
-                         highlighters=(highlight_row_label, highlight_diagonal, highlight_off_diagonal),
-                         formatters    = ft_printf("%1.0f", 1:1),
-                         )
+    isa(mat, Array) || error("The input is not a matrix")
+    
+    # Prepend row numbers as integers using a DataFrame to preserve types
+    df = DataFrame(mat, :auto)
+    insertcols!(df, 1, Symbol("0") => 1:size(mat, 1))
+    
+    # Create the column names
+    col_names = [string(i) for i in 0:size(mat, 2)]
+    rename!(df, col_names)
+
+    pretty_table(
+        df,
+        highlighters=[highlight_row_label, highlight_diagonal, highlight_off_diagonal]
+    )
 end
 
 """
