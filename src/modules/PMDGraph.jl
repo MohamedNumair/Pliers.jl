@@ -2849,7 +2849,7 @@ end
 
 
 # Re-export plotting functions from parent module
-export create_graph
+export create_graph, create_network_graph
 export plot_network_tree, plot_network_tree!
 export plot_network_coords, plot_network_coords!
 export plot_network_map
