@@ -2718,20 +2718,38 @@ function plot_symmetrical_components(bus_dict::Dict{String, Any};     makie_back
 
 end
 
+"""
+    move_coords_eng_to_math!(eng, math)
 
+Transfer geographic coordinates (latitude and longitude) from an Engineering (`eng`) 
+data structure to a Mathematical (`math`) data structure.
+
+This function iterates through the buses in the `eng` model and maps their coordinates 
+to the corresponding bus indices in the `math` model using the `bus_lookup` mapping.
+
+# Arguments
+- `eng::Dict`: The Engineering data model containing a "bus" dictionary with "lat" and "lon" keys.
+- `math::Dict`: The Mathematical data model to be updated. Must contain "bus_lookup" and "bus" keys.
+
+# Exceptions
+- Throws an `error` if `eng` is missing the "bus" key or if `math` is missing "bus_lookup".
+- Throws an `error` if the "bus" entries in `eng` do not contain "lat" or "lon" keys.
+
+# Notes
+- The function skips the entry keyed as `"sourcebus"` in the `eng["bus"]` dictionary.
+- Modifications are made **in-place** to the `math` dictionary.
+"""
 function move_coords_eng_to_math!(eng, math)
 
     if !haskey(eng, "bus") || !haskey(math, "bus_lookup")
         error("The provided 'eng' or 'math' dictionary does not contain the required keys 'bus' or 'bus_lookup'.")
     end
 
-    if !haskey(eng["bus"], "lat") || !haskey(eng["bus"], "lon")
-        error("The 'eng' dictionary does not have 'lat' or 'lon' keys in the 'bus' sub-dictionary.")
-    end
     for (b,bus) in eng["bus"]
-        if b == "sourcebus"; continue end
-        math["bus"]["$(math["bus_lookup"][b])"]["lat"] = bus["lat"]
-        math["bus"]["$(math["bus_lookup"][b])"]["lon"] = bus["lon"]
+        if haskey(bus, "lat") && haskey(bus, "lon")
+                math["bus"]["$(math["bus_lookup"][b])"]["lat"] = bus["lat"]
+                math["bus"]["$(math["bus_lookup"][b])"]["lon"] = bus["lon"]
+        end
     end
 
 end

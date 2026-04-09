@@ -20,6 +20,7 @@ module Pliers
 using DataFrames
 using CSV
 using FileIO
+using JLD2
 using Serialization
 using Suppressor
 
@@ -40,7 +41,6 @@ end
 # data analysis packages
 using Statistics
 using LinearAlgebra
-
 
 # pkg const
 const pkg_name = "Pliers"
@@ -97,7 +97,7 @@ include("io/util-spanish-networks.jl")
 
 # Sub-modules for organized namespace
 include("modules/PMDUtils.jl")
-include("modules/PMDSEUtils.jl")
 include("modules/PMDGraph.jl")
+include("modules/PMDSEUtils.jl")
 
 end # module Pliers

@@ -21,6 +21,7 @@ export show_example, show_transformer_math_components #pmd_utils.jl
 export bus_phasor, bus_phasor!
 # core/PMDSE
 export viz_residuals, df_meas_res, add_pd_qd_vmn!, write_sm_measurements, generate_meas_est_table #pmdse_utils.jl
+export plot_residuals_bars, plot_residuals_bubbles, plot_residuals_heatmap #pmdse_utils.jl (residual overlay viz)
 
 
 

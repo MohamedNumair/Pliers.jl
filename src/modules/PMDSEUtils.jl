@@ -15,8 +15,11 @@ module PMDSEUtils
 using ..Pliers
 using ..Pliers: warning_text, header, extra_keys
 using ..Pliers.PMDUtils: dictify_solution!, add_vmn_p_q
+using ..Pliers.PMDGraph: create_network_graph, smart_layout,
+    network_graph_plot, _decorate_nodes!, _decorate_edges!
 
-
+# plotting packages
+using ..Pliers: Makie, CairoMakie, WGLMakie, Graphs, MetaGraphs
 
 # pretty terminal packages
 using Crayons
@@ -632,11 +635,543 @@ end
 
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Residual Overlay Visualization on Network Graph
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Variable color and label mappings for residual bar charts
+const _VAR_COLORS = Dict{Symbol, Symbol}(
+    :vr  => :steelblue,
+    :vi  => :coral,
+    :pd  => :forestgreen,
+    :qd  => :darkorange,
+    :cid => :mediumpurple,
+    :vmn => :gold,
+    :pg  => :teal,
+    :qg  => :salmon,
+    :cr  => :royalblue,
+    :ci  => :tomato,
+)
+
+const _VAR_LABELS = Dict{Symbol, String}(
+    :vr  => "Vr",
+    :vi  => "Vi",
+    :pd  => "Pd",
+    :qd  => "Qd",
+    :cid => "Cid",
+    :vmn => "Vmn",
+    :pg  => "Pg",
+    :qg  => "Qg",
+    :cr  => "Cr",
+    :ci  => "Ci",
+)
+
+const _VAR_ORDER = Dict{Symbol, Int}(
+    :vr => 1, :vi => 2, :pd => 3, :qd => 4,
+    :cid => 5, :vmn => 6, :pg => 7, :qg => 8, :cr => 9, :ci => 10,
+)
+
+
+"""
+    _collect_bus_residuals(SE_en, math)
+
+Aggregate measurement residuals by bus. Maps each measurement to its associated bus
+based on the component type (`:bus`, `:load`, `:gen`).
+
+Returns a `Dict{String, Vector}` where each key is a bus_id string and each value
+is a vector of named tuples `(var, cmp, cmp_id, res)`.
+"""
+function _collect_bus_residuals(SE_en, math)
+    # Merge residuals from solution into math
+    for (m, meas) in SE_en["solution"]["meas"]
+        math["meas"][m]["res"] = meas["res"]
+    end
+
+    bus_residuals = Dict{String, Vector{Any}}()
+
+    for (_, meas) in math["meas"]
+        cmp = meas["cmp"]
+        cmp_id = meas["cmp_id"]
+        var = meas["var"]
+        res = meas["res"]
+
+        bus_id = if cmp == :bus
+            string(cmp_id)
+        elseif cmp == :load
+            string(math["load"][string(cmp_id)]["load_bus"])
+        elseif cmp == :gen
+            string(math["gen"][string(cmp_id)]["gen_bus"])
+        else
+            nothing
+        end
+
+        isnothing(bus_id) && continue
+
+        if !haskey(bus_residuals, bus_id)
+            bus_residuals[bus_id] = []
+        end
+        push!(bus_residuals[bus_id], (var=var, cmp=cmp, cmp_id=cmp_id, res=res))
+    end
+
+    return bus_residuals
+end
+
+
+"""
+    _get_node_positions(network_graph, layout_fn)
+
+Compute node positions from the graph and layout function.
+Returns a `Dict{String, Tuple{Float64,Float64}}` mapping bus_id to `(x, y)`.
+"""
+function _get_node_positions(network_graph, layout_fn)
+    positions = layout_fn(network_graph)
+    bus_positions = Dict{String, Tuple{Float64, Float64}}()
+    for v in vertices(network_graph)
+        bus_id = string(get_prop(network_graph, v, :bus_id))
+        # Handle cases where layout_fn returns Point2f/Point2 instead of Tuple
+        pos = positions[v]
+        bus_positions[bus_id] = (Float64(pos[1]), Float64(pos[2]))
+    end
+    return bus_positions
+end
+
+
+"""
+    _aggregate_bus_residuals(bus_residuals, phase, aggregation)
+
+Aggregate residual values per bus into a single scalar for bubble/heatmap visualizations.
+Returns `Dict{String, Float64}`.
+"""
+function _aggregate_bus_residuals(bus_residuals, phase::Int, aggregation::Symbol)
+    bus_agg = Dict{String, Float64}()
+    for (bus_id, meas_list) in bus_residuals
+        vals = Float64[]
+        for m in meas_list
+            val = get(m.res, phase, NaN)
+            !isnan(val) && push!(vals, abs(val))
+        end
+        if !isempty(vals)
+            bus_agg[bus_id] = if aggregation == :max
+                maximum(vals)
+            elseif aggregation == :mean
+                Statistics.mean(vals)
+            elseif aggregation == :sum
+                sum(vals)
+            else
+                maximum(vals)
+            end
+        end
+    end
+    return bus_agg
+end
+
+
+"""
+    _base_network_plot(math, network_graph; kwargs...)
+
+Create the base network topology plot shared by all residual visualization styles.
+Returns `(Figure, Axis, GraphPlot)`.
+"""
+function _base_network_plot(math, network_graph;
+    layout=smart_layout,
+    show_node_labels::Bool=false,
+    show_edge_labels::Bool=false,
+    figure_size=(1000, 1200),
+    makie_backend=WGLMakie,
+    node_color_override=nothing,
+    node_size_override=nothing,
+    makie_backend=CairoMakie,
+
+    nlabels = show_node_labels ? [string(props(network_graph, i)[:bus_id]) for i in 1:nv(network_graph)] : nothing
+
+    _decorate_nodes!(network_graph, math)
+    node_color = isnothing(node_color_override) ?
+        [props(network_graph, i)[:node_color] for i in 1:nv(network_graph)] : node_color_override
+    node_marker = [props(network_graph, i)[:node_marker] for i in 1:nv(network_graph)]
+    node_size = isnothing(node_size_override) ?
+        [props(network_graph, i)[:marker_size] for i in 1:nv(network_graph)] : node_size_override
+
+    _decorate_edges!(network_graph, math)
+    edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
+    arrow_show = true
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
+    arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
+
+    fig_ax_plot = network_graph_plot(
+        network_graph;
+        layout=layout,
+        figure_size=figure_size,
+        makie_backend=makie_backend,
+        show_node_labels=show_node_labels,
+        nlabels=nlabels,
+        show_edge_labels=show_edge_labels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        edge_color=edge_color,
+        arrow_show=arrow_show,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+        kwargs...
+    )
+
+    return fig_ax_plot
+end
+
+
+"""
+    plot_residuals_bars(SE_en, math; kwargs...)
+
+Plot measurement residuals as small bar charts overlaid on the network topology graph.
+Each bus with measurements shows colored bars for each variable type (e.g., Vr, Vi, Pd, Qd),
+with bar height proportional to the residual value.
+
+# Arguments
+- `SE_en`: State estimation results dictionary (with keys `"solution"`, `"objective"`, etc.)
+- `math`: Mathematical model dictionary containing `"meas"`, `"bus"`, `"load"`, `"gen"`, etc.
+
+# Keyword Arguments
+- `phase::Int=1`: Terminal/phase to display (1, 2, or 3)
+- `layout`: Graph layout function (default: `smart_layout`)
+- `use_coords::Bool=false`: If `true`, use coordinate-based layout from bus lon/lat
+- `bar_scale=:auto`: Scaling factor for bar heights (`:auto` computes from data)
+- `bar_width=:auto`: Width of each bar (`:auto` computes from data)
+- `show_node_labels::Bool=false`: Show bus ID labels
+- `show_edge_labels::Bool=false`: Show edge labels
+- `show_legend::Bool=true`: Show variable color legend
+- `makie_backend`: Makie backend (default: `WGLMakie`)
+- `figure_size::Tuple=(1000, 1200)`: Figure dimensions
+
+# Returns
+Tuple `(Figure, Axis, GraphPlot)`
+
+# Example
+```julia
+fig, ax, gp = plot_residuals_bars(SE_result, math_model; phase=1, show_node_labels=true)
+```
+"""
+function plot_residuals_bars(SE_en, math;
+    phase::Int=1,
+    layout=smart_layout,
+    use_coords::Bool=false,
+    bar_scale=:auto,
+    bar_width=:auto,
+    show_node_labels::Bool=false,
+    show_edge_labels::Bool=false,
+    show_legend::Bool=true,
+    makie_backend=WGLMakie,
+    figure_size=(1000, 1200),
+    kwargs...)
+
+    # Create network graph with appropriate layout
+    if use_coords
+        network_graph, coord_layout, _ = create_network_graph(math, layout)
+        actual_layout = coord_layout
+    else
+        network_graph, _, _ = create_network_graph(math, layout)
+        actual_layout = layout
+    end
+
+    # Collect residuals per bus
+    bus_residuals = _collect_bus_residuals(SE_en, math)
+
+    # Get node positions
+    bus_positions = _get_node_positions(network_graph, actual_layout)
+
+    # Plot base network
+    fig, ax, gp = _base_network_plot(math, network_graph;
+        layout=actual_layout, show_node_labels=show_node_labels,
+        show_edge_labels=show_edge_labels,
+        figure_size=figure_size, makie_backend=makie_backend, kwargs...)
+
+    # Compute auto-scaling from position and residual ranges
+    all_x = [p[1] for p in values(bus_positions)]
+    all_y = [p[2] for p in values(bus_positions)]
+    x_range = length(all_x) > 1 ? (maximum(all_x) - minimum(all_x)) : 1.0
+    y_range = length(all_y) > 1 ? (maximum(all_y) - minimum(all_y)) : 1.0
+    plot_scale = max(x_range, y_range)
+    plot_scale = plot_scale == 0.0 ? 1.0 : plot_scale
+
+    all_res_vals = Float64[]
+    for (_, meas_list) in bus_residuals
+        for m in meas_list
+            val = get(m.res, phase, NaN)
+            !isnan(val) && push!(all_res_vals, abs(val))
+        end
+    end
+    max_res = isempty(all_res_vals) ? 1.0 : maximum(all_res_vals)
+    max_res = max_res == 0.0 ? 1.0 : max_res
+
+    actual_bar_scale = bar_scale === :auto ? (plot_scale * 0.15) / max_res : Float64(bar_scale)
+    actual_bar_width = bar_width === :auto ? plot_scale * 0.015 : Float64(bar_width)
+
+    seen_vars = Set{Symbol}()
+
+    # Draw bars at each bus
+    for (bus_id, meas_list) in bus_residuals
+        !haskey(bus_positions, bus_id) && continue
+
+        bx, by = bus_positions[bus_id]
+
+        sorted_meas = sort(meas_list, by=m -> get(_VAR_ORDER, m.var, 99))
+        n_vars = length(sorted_meas)
+
+        total_width = n_vars * actual_bar_width * 1.5
+        start_x = bx - total_width / 2 + actual_bar_width * 0.75
+
+        for (i, m) in enumerate(sorted_meas)
+            val = get(m.res, phase, NaN)
+            isnan(val) && continue
+
+            push!(seen_vars, m.var)
+
+            bar_x = start_x + (i - 1) * actual_bar_width * 1.5
+            bar_h = abs(val) * actual_bar_scale
+            bar_color = get(_VAR_COLORS, m.var, :gray)
+
+            offset_y = plot_scale * 0.02
+            rect_points = Point2f[
+                (bar_x - actual_bar_width/2, by + offset_y),
+                (bar_x + actual_bar_width/2, by + offset_y),
+                (bar_x + actual_bar_width/2, by + offset_y + bar_h),
+                (bar_x - actual_bar_width/2, by + offset_y + bar_h),
+            ]
+            poly!(ax, rect_points; color=bar_color, strokecolor=:black, strokewidth=0.5)
+        end
+    end
+
+    # Add legend
+    if show_legend && !isempty(seen_vars)
+        sorted_vars = sort(collect(seen_vars), by=v -> get(_VAR_ORDER, v, 99))
+        legend_entries = [PolyElement(color=get(_VAR_COLORS, v, :gray), strokecolor=:black, strokewidth=0.5) for v in sorted_vars]
+        legend_labels = [get(_VAR_LABELS, v, string(v)) for v in sorted_vars]
+        Legend(fig[1, 2], legend_entries, legend_labels, "Variables")
+    end
+
+    return fig, ax, gp
+end
+
+
+"""
+    plot_residuals_bubbles(SE_en, math; kwargs...)
+
+Plot measurement residuals as circles overlaid on the network topology graph.
+Circle radius is proportional to the aggregated residual magnitude at each bus,
+and color is mapped via a continuous colormap.
+
+# Arguments
+- `SE_en`: State estimation results dictionary
+- `math`: Mathematical model dictionary with measurements
+
+# Keyword Arguments
+- `phase::Int=1`: Terminal/phase to display (1, 2, or 3)
+- `layout`: Graph layout function (default: `smart_layout`)
+- `use_coords::Bool=false`: If `true`, use coordinate-based layout
+- `max_bubble_size::Float64=30.0`: Maximum bubble marker size in pixels
+- `min_bubble_size::Float64=5.0`: Minimum bubble marker size in pixels
+- `aggregation::Symbol=:max`: How to aggregate residuals per bus (`:max`, `:mean`, `:sum`)
+- `show_node_labels::Bool=false`: Show bus ID labels
+- `show_legend::Bool=true`: Show colorbar
+- `colormap=:RdYlGn_r`: Colormap for bubble coloring
+- `makie_backend`: Makie backend (default: `WGLMakie`)
+- `figure_size::Tuple=(1000, 1200)`: Figure dimensions
+
+# Returns
+Tuple `(Figure, Axis, GraphPlot)`
+
+# Example
+```julia
+fig, ax, gp = plot_residuals_bubbles(SE_result, math_model; aggregation=:mean, colormap=:viridis)
+```
+"""
+function plot_residuals_bubbles(SE_en, math;
+    phase::Int=1,
+    layout=smart_layout,
+    use_coords::Bool=false,
+    max_bubble_size::Float64=30.0,
+    min_bubble_size::Float64=5.0,
+    aggregation::Symbol=:max,
+    show_node_labels::Bool=false,
+    show_edge_labels::Bool=false,
+    show_legend::Bool=true,
+    colormap=:RdYlGn_r,
+    makie_backend=WGLMakie,
+    figure_size=(1000, 1200),
+    kwargs...)
+
+    # Create network graph
+    if use_coords
+        network_graph, coord_layout, _ = create_network_graph(math, layout)
+        actual_layout = coord_layout
+    else
+        network_graph, _, _ = create_network_graph(math, layout)
+        actual_layout = layout
+    end
+
+    # Collect and aggregate residuals
+    bus_residuals = _collect_bus_residuals(SE_en, math)
+    bus_positions = _get_node_positions(network_graph, actual_layout)
+    bus_agg = _aggregate_bus_residuals(bus_residuals, phase, aggregation)
+
+    # Plot base network
+    fig, ax, gp = _base_network_plot(math, network_graph;
+        layout=actual_layout, show_node_labels=show_node_labels,
+        show_edge_labels=show_edge_labels,
+        figure_size=figure_size, makie_backend=makie_backend, kwargs...)
+
+    if !isempty(bus_agg)
+        agg_values = collect(values(bus_agg))
+        min_val = minimum(agg_values)
+        max_val = maximum(agg_values)
+        val_range = max_val - min_val
+        val_range = val_range == 0.0 ? 1.0 : val_range
+
+        bubble_x = Float64[]
+        bubble_y = Float64[]
+        bubble_sizes = Float64[]
+        bubble_colors = Float64[]
+
+        for (bus_id, agg_val) in bus_agg
+            !haskey(bus_positions, bus_id) && continue
+            bx, by = bus_positions[bus_id]
+            push!(bubble_x, bx)
+            push!(bubble_y, by)
+
+            norm_val = (agg_val - min_val) / val_range
+            push!(bubble_sizes, min_bubble_size + norm_val * (max_bubble_size - min_bubble_size))
+            push!(bubble_colors, agg_val)
+        end
+
+        scatter!(ax, bubble_x, bubble_y;
+            markersize=bubble_sizes,
+            color=bubble_colors,
+            colormap=colormap,
+            colorrange=(min_val, max_val),
+            strokecolor=:black,
+            strokewidth=0.5,
+            alpha=0.7)
+
+        if show_legend
+            Colorbar(fig[1, 2]; colormap=colormap, colorrange=(min_val, max_val),
+                label="Residual ($(aggregation))")
+        end
+    end
+
+    return fig, ax, gp
+end
+
+
+"""
+    plot_residuals_heatmap(SE_en, math; kwargs...)
+
+Plot the network graph with nodes colored by their aggregated measurement
+residual values using a continuous colormap. Nodes without measurements
+are shown in translucent gray.
+
+# Arguments
+- `SE_en`: State estimation results dictionary
+- `math`: Mathematical model dictionary with measurements
+
+# Keyword Arguments
+- `phase::Int=1`: Terminal/phase to display (1, 2, or 3)
+- `layout`: Graph layout function (default: `smart_layout`)
+- `use_coords::Bool=false`: If `true`, use coordinate-based layout
+- `aggregation::Symbol=:max`: How to aggregate residuals per bus (`:max`, `:mean`, `:sum`)
+- `show_node_labels::Bool=false`: Show bus ID labels
+- `show_legend::Bool=true`: Show colorbar
+- `colormap=:RdYlGn_r`: Colormap for node coloring
+- `node_size::Int=15`: Size of nodes that have measurements
+- `makie_backend`: Makie backend (default: `WGLMakie`)
+- `figure_size::Tuple=(1000, 1200)`: Figure dimensions
+
+# Returns
+Tuple `(Figure, Axis, GraphPlot)`
+
+# Example
+```julia
+fig, ax, gp = plot_residuals_heatmap(SE_result, math_model; colormap=:hot, aggregation=:mean)
+```
+"""
+function plot_residuals_heatmap(SE_en, math;
+    phase::Int=1,
+    layout=smart_layout,
+    use_coords::Bool=false,
+    aggregation::Symbol=:max,
+    show_node_labels::Bool=false,
+    show_edge_labels::Bool=false,
+    show_legend::Bool=true,
+    colormap=:RdYlGn_r,
+    node_size::Int=15,
+    makie_backend=WGLMakie,
+    figure_size=(1000, 1200),
+    kwargs...)
+
+    # Create network graph
+    if use_coords
+        network_graph, coord_layout, _ = create_network_graph(math, layout)
+        actual_layout = coord_layout
+    else
+        network_graph, _, _ = create_network_graph(math, layout)
+        actual_layout = layout
+    end
+
+    # Collect and aggregate residuals
+    bus_residuals = _collect_bus_residuals(SE_en, math)
+    bus_agg = _aggregate_bus_residuals(bus_residuals, phase, aggregation)
+
+    # Compute node colors based on residuals
+    agg_values = isempty(bus_agg) ? [0.0] : collect(values(bus_agg))
+    min_val = minimum(agg_values)
+    max_val = maximum(agg_values)
+    val_range = max_val - min_val
+    val_range = val_range == 0.0 ? 1.0 : val_range
+
+    cmap = Makie.to_colormap(colormap)
+    n_colors = length(cmap)
+
+    node_colors = []
+    node_sizes = Int[]
+    for v in 1:nv(network_graph)
+        bus_id = string(get_prop(network_graph, v, :bus_id))
+        if haskey(bus_agg, bus_id)
+            norm_val = (bus_agg[bus_id] - min_val) / val_range
+            color_idx = clamp(round(Int, norm_val * (n_colors - 1)) + 1, 1, n_colors)
+            push!(node_colors, cmap[color_idx])
+            push!(node_sizes, node_size)
+        else
+            push!(node_colors, Makie.RGBAf(0.7, 0.7, 0.7, 0.5))
+            push!(node_sizes, 5)
+        end
+    end
+
+    # Plot with overridden node colors
+    fig, ax, gp = _base_network_plot(math, network_graph;
+        layout=actual_layout, show_node_labels=show_node_labels,
+        show_edge_labels=show_edge_labels,
+        figure_size=figure_size, makie_backend=makie_backend,
+        node_color_override=node_colors,
+        node_size_override=node_sizes,
+        kwargs...)
+
+    if show_legend && !isempty(bus_agg)
+        Colorbar(fig[1, 2]; colormap=colormap, colorrange=(min_val, max_val),
+            label="Residual ($(aggregation))")
+    end
+
+    return fig, ax, gp
+end
+
+
 # Re-export PMDSE utility functions from parent module
 export viz_residuals
 export df_meas_res
 export add_pd_qd_vmn!
 export write_sm_measurements
+export plot_residuals_bars
+export plot_residuals_bubbles
+export plot_residuals_heatmap
 
 
 
