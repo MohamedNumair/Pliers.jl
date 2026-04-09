@@ -14,6 +14,7 @@ See the main Pliers module for function documentation.
 module PMDGraph
 
 using ..Pliers
+using ..Pliers: Tyler
 using ..PMDUtils
 using ..PMDUtils: _is_eng
 
@@ -32,7 +33,7 @@ using GeoMakie
 using Proj
 using Graphs
 using MetaGraphs
-
+using Statistics
 
 
 
@@ -1122,7 +1123,7 @@ function network_graph_map_plot(
     network_graph::MetaDiGraph,
     GraphLayout::Function;
     # map 
-    tiles_provider=TileProviders.Google(:satelite), # :roadmap, :satelite, :terrain, :hybrid
+    tiles_provider=Tyler.TileProviders.Google(:satelite), # :roadmap, :satelite, :terrain, :hybrid
     zoom_lon=0.0942,
     zoom_lat=0.0942,
     # figure
@@ -1153,11 +1154,11 @@ function network_graph_map_plot(
     arrow_shift=0.5,
     kwargs...)
 
-    map_layout = GraphLayout(1)
-    center_lon = mean(lonslats[1] for lonslats in map_layout)
-    center_lat = mean(lonslats[2] for lonslats in map_layout)
-    max_lon = maximum(lonslats[1] for lonslats in map_layout)
-    max_lat = minimum(lonslats[2] for lonslats in map_layout)
+    map_layout = GraphLayout(network_graph)
+    center_lon = Statistics.mean(lonslats[1] for lonslats in map_layout)
+    center_lat = Statistics.mean(lonslats[2] for lonslats in map_layout)
+    max_lon = Statistics.maximum(lonslats[1] for lonslats in map_layout)
+    max_lat = Statistics.minimum(lonslats[2] for lonslats in map_layout)
     cent_to_max_lon = abs(max_lon - center_lon) * 2
     cent_to_max_lat = abs(max_lat - center_lat) * 2
 
@@ -1168,7 +1169,7 @@ function network_graph_map_plot(
     map_window_coords = Rect2f(center_lon - zoom_lon / 2, center_lat - zoom_lat / 2, zoom_lon, zoom_lat)
 
 
-    # m = Tyler.Map(map_window_coords; provider=tiles_provider, crs=Tyler.wgs84)
+    m = Tyler.Map(map_window_coords; provider=tiles_provider, crs=Tyler.wgs84)
     # hidedecorations!(m.axis)
     # hidespines!(m.axis)
 
