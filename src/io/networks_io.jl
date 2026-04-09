@@ -1,3 +1,5 @@
+using JLD2
+
 function load_enwl_model(ntw::Int, fdr::Int)
     eng = load(joinpath(BASE_DIR,"test/data/MENWL/Ntw_$(ntw)_Fdr_$(fdr).jld2"))
     
