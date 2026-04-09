@@ -1361,26 +1361,11 @@ end
 
 
 
-
-"""
-    plot_network_tree(dss::String; kwargs...)
-
-Plots a network tree from a given DSS file.
-
-# Arguments
-- `dss::String`: The path to the DSS file containing the network data.
-- `makie_backend`: The Makie backend to use for plotting. Defaults to `WGLMakie`.
-
-# Description
-This function parses the DSS file to create an engineering model of the network, transforms loops in the model, and converts keys to symbols. It then constructs a network graph using `MetaDiGraph`, adds vertices for each bus, and sets the `sourcebus` as the root. Edges are added based on the `f_bus` and `t_bus` indices of the lines. Finally, it plots the network graph using `graphplot` with a specified layout and labels for nodes and edges.
-
-# Returns
-A plot of the network graph.
-"""
-function plot_network_tree(dss::String; kwargs...)
-    eng = PowerModelsDistribution.parse_file(dss)
-    plot_network_tree(eng, kwargs...)
-end
+# I removed support for PMD inside Pliers
+# function plot_network_tree(dss::String; kwargs...)
+#     eng = PowerModelsDistribution.parse_file(dss)
+#     plot_network_tree(eng, kwargs...)
+#end
 
 function plot_network_tree!(
     ax::Axis,
@@ -1610,7 +1595,10 @@ function plot_network_coords!(
 
     _decorate_edges!(network_graph, data)
     edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
-    arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+    # Calculating arrow_show as true (globally enabled) but controlling visibility via arrow_size=0
+    # This avoids "non-boolean (Vector{Bool}) used in boolean context" error in Makie
+    arrow_show_global = any(Bool[get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)])
+
     arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
     arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
     arrow_shift = [get_prop(network_graph, e, :arrow_shift) for e in edges(network_graph)]
@@ -1626,7 +1614,7 @@ function plot_network_coords!(
         show_edge_labels=show_edge_labels || show_transformer_labels || show_switch_labels,
         elabels=elabels,
         edge_color=edge_color,
-        arrow_show=arrow_show,
+        arrow_show=arrow_show_global,
         arrow_marker=arrow_marker,
         arrow_size=arrow_size,
         arrow_shift=arrow_shift,
@@ -1735,8 +1723,7 @@ function plot_network_map(
         edge_color = [get_prop(network_graph, e, :edge_color) for e in edges(network_graph)]
         # Calculating arrow_show as true (globally enabled) but controlling visibility via arrow_size=0
         # This avoids "non-boolean (Vector{Bool}) used in boolean context" error in Makie
-        arrow_show = true
-        # arrow_show = [get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)]
+        arrow_show_global = any([get_prop(network_graph, e, :arrow_show) for e in edges(network_graph)])
 
         arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
         arrow_size = [get_prop(network_graph, e, :arrow_size) for e in edges(network_graph)]
@@ -1751,7 +1738,7 @@ function plot_network_map(
             node_marker=node_marker,
             node_size=node_size,
             edge_color=edge_color,
-            arrow_show=arrow_show,
+            arrow_show=arrow_show_global,
             arrow_marker=arrow_marker,
             arrow_size=arrow_size,
             arrow_shift=arrow_shift,
