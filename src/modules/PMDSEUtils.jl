@@ -19,10 +19,7 @@ using ..Pliers.PMDGraph: create_network_graph, smart_layout,
     network_graph_plot, _decorate_nodes!, _decorate_edges!
 
 # plotting packages
-using Makie
-using CairoMakie
-using WGLMakie
-using Graphs, MetaGraphs
+using ..Pliers: Makie, CairoMakie, WGLMakie, Graphs, MetaGraphs
 
 # pretty terminal packages
 using Crayons
@@ -757,7 +754,7 @@ function _aggregate_bus_residuals(bus_residuals, phase::Int, aggregation::Symbol
             bus_agg[bus_id] = if aggregation == :max
                 maximum(vals)
             elseif aggregation == :mean
-                mean(vals)
+                Statistics.mean(vals)
             elseif aggregation == :sum
                 sum(vals)
             else
@@ -783,7 +780,7 @@ function _base_network_plot(math, network_graph;
     makie_backend=WGLMakie,
     node_color_override=nothing,
     node_size_override=nothing,
-    kwargs...)
+    makie_backend=CairoMakie,
 
     nlabels = show_node_labels ? [string(props(network_graph, i)[:bus_id]) for i in 1:nv(network_graph)] : nothing
 

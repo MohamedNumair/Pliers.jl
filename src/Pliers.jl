@@ -20,6 +20,7 @@ module Pliers
 using DataFrames
 using CSV
 using FileIO
+using JLD2
 using Serialization
 using Suppressor
 
@@ -40,7 +41,6 @@ end
 # data analysis packages
 using Statistics
 using LinearAlgebra
-
 
 # pkg const
 const pkg_name = "Pliers"
