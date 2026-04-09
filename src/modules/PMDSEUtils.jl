@@ -15,11 +15,11 @@ module PMDSEUtils
 using ..Pliers
 using ..Pliers: warning_text, header, extra_keys
 using ..Pliers.PMDUtils: dictify_solution!, add_vmn_p_q
-using ..Pliers.PMDGraph: create_network_graph, smart_layout,
+using ..Pliers.PMDGraph: Graphs, MetaGraphs, create_network_graph, smart_layout,
     network_graph_plot, _decorate_nodes!, _decorate_edges!
 
 # plotting packages
-using ..Pliers: Makie, CairoMakie, WGLMakie, Graphs, MetaGraphs
+using ..Pliers: Makie, CairoMakie, WGLMakie
 
 # pretty terminal packages
 using Crayons
