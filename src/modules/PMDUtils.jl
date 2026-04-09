@@ -888,8 +888,8 @@ function math_bus_details(math, idx)
         bus = math["bus"][id]
         header("Bus $id")
         values = [get(bus, label, missing) for label in labels]
-        table = DataFrame(labels=labels, values=values)
-        pretty_table(table, header=["Name", "Value"])
+        table = DataFrame(Name=labels, Value=values)
+        pretty_table(table)
     end
 end
 
@@ -987,8 +987,8 @@ function math_branch_details(math::Dict{String,Any}, branch_idx)
 
         labels_1 = ["f_bus", "t_bus", "f_connections", "t_connections", "br_status", "vbase", "rate_a", "rate_b", "rate_c", "c_rating_a", "c_rating_b", "c_rating_c", "angmin", "angmax"]
         values_1 = [get(branch, label, missing) for label in labels_1]
-        table_1 = DataFrame(labels=labels_1, values=values_1)
-        pretty_table(table_1, header=["Name", "Value"])
+        table_1 = DataFrame(Name=labels_1, Value=values_1)
+        pretty_table(table_1)
 
         sub_header("br_r:  ")
         _pretty_diag_matrix(get(branch, "br_r", missing))
@@ -1077,8 +1077,8 @@ function math_load_details(math, idx)
         load = math["load"][id]
         header("Load $id")
         values = [get(load, label, missing) for label in labels]
-        table = DataFrame(labels=labels, values=values)
-        pretty_table(table, header=["Name", "Value"])
+        table = DataFrame(Name=labels, Value=values)
+        pretty_table(table)
     end
 end
 
@@ -1172,8 +1172,8 @@ function math_gen_details(math, idx)
         gen = math["gen"][id]
         header("Generator $id")
         values = [get(gen, label, missing) for label in labels]
-        table = DataFrame(labels=labels, values=values)
-        pretty_table(table, header=["Name", "Value"])
+        table = DataFrame(Name=labels, Value=values)
+        pretty_table(table)
     end
 end
 
@@ -1300,8 +1300,8 @@ function math_transformer_details(math, idx)
         transformer = math["transformer"][id]
         header("Transformer $id")
         values = [get(transformer, label, missing) for label in labels]
-        table = DataFrame(labels=labels, values=values)
-        pretty_table(table, header=["Name", "Value"])
+        table = DataFrame(Name=labels, Value=values)
+        pretty_table(table)
     end
 end
 
