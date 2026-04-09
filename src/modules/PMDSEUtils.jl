@@ -780,7 +780,7 @@ function _base_network_plot(math, network_graph;
     makie_backend=WGLMakie,
     node_color_override=nothing,
     node_size_override=nothing,
-    makie_backend=CairoMakie,
+    makie_backend=CairoMakie,)
 
     nlabels = show_node_labels ? [string(props(network_graph, i)[:bus_id]) for i in 1:nv(network_graph)] : nothing
 
