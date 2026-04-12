@@ -1407,14 +1407,14 @@ end
 
 # function to get the results dictionary
 
-function pf_results(eng::Dict{String, Any}; max_iter = 5000,kwargs...)
+function pf_results(eng::Dict{String, Any}, PMD; max_iter = 5000,kwargs...)
     # I won't develop this function further, the strategy will be to calcualte your results using typical PMD.jl functions and then you use dictify solution and viz anything. 
     is_explicit_netrual = length(eng["conductor_ids"]) > 3 ? true :  false
 
-    _is_eng(eng) ? math=transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("This function only supports ENGINEERING data model for the moment")
+    _is_eng(eng) ? math=PMD.transform_data_model(eng, kron_reduce=!is_explicit_netrual, phase_project=!is_explicit_netrual) : error("This function only supports ENGINEERING data model for the moment")
     
-    add_start_vrvi!(math)
-    PF = compute_mc_pf(math; explicit_neutral=is_explicit_netrual, max_iter=max_iter)
+    PMD.add_start_vrvi!(math)
+    PF = PMD.compute_mc_pf(math; explicit_neutral=is_explicit_netrual, max_iter=max_iter)
 
     return pf_results(PF,math, eng; kwargs...)
 end
