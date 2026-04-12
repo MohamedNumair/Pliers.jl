@@ -1427,7 +1427,7 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
     results_headings = ["Termination Status", "Iterations", "Total Time", "Build Time", "Post Time", "Solve Time", "Stationarity"]
     results_values = [results["termination_status"], results["iterations"], results["time_total"], results["time_build"], results["time_post"], results["time_solve"], results["stationarity"]]
     summary_table = DataFrame(Label = results_headings, Value = results_values)
-    pretty_table(summary_table, highlighters=(_highlight_results_status))
+    pretty_table(summary_table, highlighters=[_highlight_results_status])
     
     
     # Moving results into the ENG dictionary 
