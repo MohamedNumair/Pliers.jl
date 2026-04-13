@@ -3646,6 +3646,162 @@ end
 @define_table_from_file terminal_bus_plot
 
 
+"""
+    terminal_line_plot(data::Dict{String,Any}, line_id)
+
+Generates a terminal-based ASCII diagram showing the second-level connectivity
+around a specific line or branch. The line/branch is shown as the central element;
+buses at each end (`f_bus`, `t_bus`) are shown as labelled nodes; and all *other*
+edges that touch those buses (one hop away from the main edge) are shown as
+branches hanging off each side.
+
+Works for both Engineering (`data["line"]`) and Mathematical (`data["branch"]`).
+
+# Arguments
+- `data`: PMD data dictionary (ENG or MATH model).
+- `line_id`: The ID of the line/branch to inspect (String or Integer).
+
+# Example
+```julia
+terminal_line_plot(eng, "line2")
+terminal_line_plot(math, "5")
+```
+"""
+function terminal_line_plot(data::Dict, line_id)
+    # ── 1. Detect model ──────────────────────────────────────────────────────
+    if haskey(data, "line")
+        edges = data["line"]
+    elseif haskey(data, "branch")
+        edges = data["branch"]
+    else
+        println("[terminal_line_plot] Data must contain 'line' (ENG) or 'branch' (MATH).")
+        return
+    end
+
+    line_id_str = string(line_id)
+
+    # ── 2. Locate main edge ───────────────────────────────────────────────────
+    main_edge = nothing
+    for (k, edge) in edges
+        if string(k) == line_id_str
+            main_edge = edge
+            break
+        end
+    end
+    if isnothing(main_edge)
+        println("[terminal_line_plot] Edge '$line_id_str' not found.")
+        return
+    end
+
+    f_bus = string(main_edge["f_bus"])
+    t_bus = string(main_edge["t_bus"])
+
+    # Display name for the main edge
+    main_name = if haskey(main_edge, "name")
+        haskey(main_edge, "index") ? "$(main_edge["index"]) : $(main_edge["name"])" : string(main_edge["name"])
+    else
+        line_id_str
+    end
+
+    # ── 3. Collect second-level neighbor edges ────────────────────────────────
+    # left_edges  = edges that touch f_bus (other than main)
+    # right_edges = edges that touch t_bus (other than main)
+    left_edges  = String[]
+    right_edges = String[]
+
+    for (k, edge) in edges
+        string(k) == line_id_str && continue
+        eb = string(edge["f_bus"])
+        et = string(edge["t_bus"])
+        name = if haskey(edge, "name")
+            haskey(edge, "index") ? "$(edge["index"]) : $(edge["name"])" : string(edge["name"])
+        else
+            string(k)
+        end
+        (eb == f_bus || et == f_bus) && push!(left_edges,  name)
+        (eb == t_bus || et == t_bus) && push!(right_edges, name)
+    end
+    sort!(left_edges)
+    sort!(right_edges)
+
+    # ── 4. Layout constants ───────────────────────────────────────────────────
+    HL = "─";  VL = "│"
+
+    f_bus_label  = "($f_bus)"
+    t_bus_label  = "($t_bus)"
+    main_sep     = " ─── \"$main_name\" ─── "
+
+    # Left/right edge formatters.  fmt_left ends with ── so it flows into f_bus_label on row 1.
+    fmt_left(n)  = " ── \"$n\" ──"
+    fmt_right(n) = "── \"$n\" ── "
+
+    W_L          = isempty(left_edges)  ? 0 : maximum(length(fmt_left(n))  for n in left_edges)
+    center_width = length(f_bus_label) + length(main_sep) + length(t_bus_label)
+
+    # 1-indexed spine positions within the center char array
+    f_spine_1 = div(length(f_bus_label), 2) + 1
+    t_spine_1 = length(f_bus_label) + length(main_sep) + div(length(t_bus_label), 2) + 1
+
+    rows = max(length(left_edges), length(right_edges), 1)
+
+    # ── 5. Draw rows ──────────────────────────────────────────────────────────
+    for i in 1:rows
+
+        # LEFT column
+        if i <= length(left_edges)
+            raw      = fmt_left(left_edges[i])
+            pad      = W_L - length(raw)
+            left_str = " "^pad * string(CYAN_FG(raw))
+        else
+            left_str = " "^W_L
+        end
+
+        # CENTER column
+        if i == 1
+            # Full main-line row
+            center_str = string(BOLD(YELLOW_FG(f_bus_label))) *
+                         string(CYAN_FG(main_sep)) *
+                         string(BOLD(YELLOW_FG(t_bus_label)))
+        else
+            # Spine row: build char array, place connectors at spine positions
+            chars = fill(' ', center_width)
+
+            is_left      = i <= length(left_edges)
+            is_right     = i <= length(right_edges)
+            is_last_left = (i == length(left_edges))
+            is_last_right= (i == length(right_edges))
+
+            if is_left
+                f_char = is_last_left ? '┘' : '┤'
+                chars[f_spine_1] = f_char
+                for j in 1:f_spine_1-1
+                    chars[j] = '─'
+                end
+            end
+
+            if is_right
+                t_char = is_last_right ? '└' : '├'
+                chars[t_spine_1] = t_char
+                for j in t_spine_1+1:center_width
+                    chars[j] = '─'
+                end
+            end
+
+            center_str = string(CYAN_FG(String(chars)))
+        end
+
+        # RIGHT column
+        if i <= length(right_edges)
+            right_str = string(CYAN_FG(fmt_right(right_edges[i])))
+        else
+            right_str = ""
+        end
+
+        println(left_str * center_str * right_str)
+    end
+end
+
+
 
 
 
@@ -3673,7 +3829,7 @@ export show_example, show_transformer_math_components
 export pf_results, bus_res, branch_viz
 
 # Re-export eng explorer functions
-export eng_report, buses_table, lines_table, loads_table, linecodes_table, linecode_table, transformers_table, terminal_bus_plot
+export eng_report, buses_table, lines_table, loads_table, linecodes_table, linecode_table, transformers_table, terminal_bus_plot, terminal_line_plot
 
 # Re-export math explorer functions
 export math_report, math_buses_table, math_branches_table, math_branch_details

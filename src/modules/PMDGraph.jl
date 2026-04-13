@@ -854,17 +854,23 @@ function _format_tooltip_props(p::Dict; title="Properties")
 end
 
 """
-    _build_inspector_labels(network_graph::MetaDiGraph) -> (node_fn, edge_fn)
+    _build_inspector_labels(network_graph::MetaDiGraph, pmd_data=nothing) -> (node_fn, edge_fn)
 
 Build `inspector_label` callback functions for nodes and edges of `network_graph`,
 suitable for use with Makie's `DataInspector`.  Pass the returned functions via
 the `node_attr` and `edge_attr` named-tuple kwargs of `graphplot`/`graphplot!`.
 
+When `pmd_data` (original PMD `Dict{String,Any}`) is supplied:
+- Node hover also prints `terminal_bus_plot` connectivity diagram to the terminal.
+- Edge hover also prints `terminal_line_plot` connectivity diagram to the terminal.
+Both callbacks additionally `display` the full property dict to the terminal
+(without truncation).
+
 The edge index mapping assumes `EdgePlot` serialises each edge as `[p1, p2, NaN]`
 (one NaN separator per edge in the internal `Lines` plot), so the conversion is:
 `edge_idx = div(raw_idx - 1, 3) + 1`.
 """
-function _build_inspector_labels(network_graph::MetaDiGraph)
+function _build_inspector_labels(network_graph::MetaDiGraph, pmd_data=nothing)
     # Capture ordered edge list for O(1) lookup by sequential index
     _edgelist = collect(edges(network_graph))
 
@@ -872,6 +878,26 @@ function _build_inspector_labels(network_graph::MetaDiGraph)
         v = Int(idx)
         v_props = props(network_graph, v)
         bus_label = string(get(v_props, :bus_id, v))
+
+        # ── Terminal output ────────────────────────────────────────────────────
+        println("\n" * "═"^60)
+        println("  BUS: $bus_label")
+        println("═"^60)
+        # 1. Connectivity diagram
+        if !isnothing(pmd_data)
+            try
+                PMDUtils.terminal_bus_plot(pmd_data, string(bus_label))
+            catch e
+                @debug "terminal_bus_plot failed for bus $bus_label: $e"
+            end
+            println()
+        end
+        # 2. Full property dict (no truncation)
+        display(Dict(string(k) => v for (k, v) in v_props
+                     if k ∉ _TOOLTIP_DECORATION_KEYS))
+        println("═"^60)
+
+        # ── Tooltip string (truncated, for the floating overlay) ──────────────
         _format_tooltip_props(v_props; title="Bus $bus_label")
     end
 
@@ -890,6 +916,26 @@ function _build_inspector_labels(network_graph::MetaDiGraph)
             tag = get(e_props, :is_switch, false) ? "Switch" : "Line"
             id  = get(e_props, :line_id, e_idx)
         end
+
+        # ── Terminal output ────────────────────────────────────────────────────
+        println("\n" * "═"^60)
+        println("  $tag: $id")
+        println("═"^60)
+        # 1. Connectivity diagram
+        if !isnothing(pmd_data)
+            try
+                PMDUtils.terminal_line_plot(pmd_data, string(id))
+            catch e
+                @debug "terminal_line_plot failed for $tag $id: $e"
+            end
+            println()
+        end
+        # 2. Full property dict (no truncation)
+        display(Dict(string(k) => v for (k, v) in e_props
+                     if k ∉ _TOOLTIP_DECORATION_KEYS))
+        println("═"^60)
+
+        # ── Tooltip string (truncated, for the floating overlay) ──────────────
         _format_tooltip_props(e_props; title="$tag $id")
     end
 
@@ -961,13 +1007,15 @@ function network_graph_plot(
     arrow_marker='➤',
     arrow_size=12,
     arrow_shift=0.5,
+    # PMD data dict forwarded to DataInspector terminal callbacks
+    _pmd_data=nothing,
     kwargs...)
 
     makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
     @debug "The used layout is: $layout"
-    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph, _pmd_data)
     return graphplot(
         network_graph;
         layout=layout,
@@ -1036,12 +1084,14 @@ function network_graph_plot!(
     arrow_marker='➤',
     arrow_size=12,
     arrow_shift=0.5,
+    # PMD data dict forwarded to DataInspector terminal callbacks
+    _pmd_data=nothing,
     kwargs...)
 
     #makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
-    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph, _pmd_data)
     add_graph = graphplot!(
         network_graph;
         layout=layout,
@@ -1113,12 +1163,14 @@ function network_graph_plot!(
     arrow_marker='➤',
     arrow_size=12,
     arrow_shift=0.5,
+    # PMD data dict forwarded to DataInspector terminal callbacks
+    _pmd_data=nothing,
     kwargs...)
 
     #makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
-    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph, _pmd_data)
     add_graph = graphplot!(
         ax,
         network_graph;
@@ -1253,6 +1305,7 @@ function network_graph_map_plot(
     arrow_marker='➤',
     arrow_size=12,
     arrow_shift=0.5,
+    _pmd_data=nothing,
     kwargs...)
 
     map_layout = GraphLayout(network_graph)
@@ -1278,7 +1331,7 @@ function network_graph_map_plot(
 
 
 
-    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph, _pmd_data)
 
     graph = graphplot!(
         network_graph;
@@ -1458,6 +1511,7 @@ function plot_network_tree(
         arrow_marker=arrow_marker,
         arrow_size=arrow_size,
         arrow_shift=arrow_shift,
+        _pmd_data=data,
         kwargs...
     )
 end
@@ -1544,6 +1598,7 @@ function plot_network_tree!(
         arrow_marker=arrow_marker,
         arrow_size=arrow_size,
         arrow_shift=arrow_shift,
+        _pmd_data=data,
         kwargs...
     )
 end
@@ -1662,6 +1717,7 @@ function plot_network_coords(
         arrow_marker=arrow_marker,
         arrow_size=arrow_size,
         arrow_shift=arrow_shift,
+        _pmd_data=data,
         kwargs...
     )
 end
@@ -1723,6 +1779,7 @@ function plot_network_coords!(
         arrow_marker=arrow_marker,
         arrow_size=arrow_size,
         arrow_shift=arrow_shift,
+        _pmd_data=data,
         kwargs...
     )
 end
@@ -1847,6 +1904,7 @@ function plot_network_map(
             arrow_marker=arrow_marker,
             arrow_size=arrow_size,
             arrow_shift=arrow_shift,
+            _pmd_data=data,
             kwargs...
         )
 
