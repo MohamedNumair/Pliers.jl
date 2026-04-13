@@ -6,6 +6,7 @@ Manifest.toml
 LogoDesign.svg
 keys.txt
 Manifest.toml
+.github/
 .github/copilot-instructions.md
 .github/agents/power-systems-expert.agent.md
 .github/agents/knowledge/workspace-discovery.md

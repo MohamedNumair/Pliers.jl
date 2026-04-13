@@ -801,6 +801,100 @@ function smart_layout(g)
 end
 
 
+# ---------------------------------------------------------------------------
+# DataInspector tooltip helpers
+# ---------------------------------------------------------------------------
+
+"""Keys from graph vertex/edge properties that are plot decorations and should be omitted from tooltips."""
+const _TOOLTIP_DECORATION_KEYS = Set{Symbol}([
+    :node_color, :node_marker, :marker_size,
+    :edge_color, :arrow_show, :arrow_marker, :arrow_size, :arrow_shift,
+])
+
+"""Format a single property value as a concise string for a DataInspector tooltip."""
+function _tooltip_value_str(v; maxlen=60)
+    s = if v isa AbstractMatrix
+        m, n = size(v)
+        inner = join(
+            [join([string(round(Float64(x), digits=4)) for x in row], "  ") for row in eachrow(v)],
+            "; "
+        )
+        s_full = "[" * inner * "]"
+        length(s_full) > maxlen ? "Matrix($(m)×$(n))" : s_full
+    elseif v isa AbstractVector
+        if length(v) <= 6
+            vals = eltype(v) <: AbstractFloat ? round.(Float64.(v), digits=4) : collect(v)
+            string(vals)
+        else
+            "Vector($(length(v)))"
+        end
+    elseif v isa Dict
+        isempty(v) ? "{}" : "{$(length(v)) entries}"
+    elseif v isa AbstractFloat
+        string(round(Float64(v), digits=6))
+    else
+        string(v)
+    end
+    return length(s) > maxlen ? s[1:maxlen] * "…" : s
+end
+
+"""
+    _format_tooltip_props(p::Dict; title="Properties") -> String
+
+Format a MetaDiGraph property dictionary into a human-readable multi-line string
+suitable for display in a `DataInspector` tooltip. Skips plot decoration keys.
+"""
+function _format_tooltip_props(p::Dict; title="Properties")
+    lines = String["─── $title ───"]
+    for k in sort(collect(keys(p)), by=string)
+        k in _TOOLTIP_DECORATION_KEYS && continue
+        push!(lines, "  $k: $(_tooltip_value_str(p[k]))")
+    end
+    return join(lines, "\n")
+end
+
+"""
+    _build_inspector_labels(network_graph::MetaDiGraph) -> (node_fn, edge_fn)
+
+Build `inspector_label` callback functions for nodes and edges of `network_graph`,
+suitable for use with Makie's `DataInspector`.  Pass the returned functions via
+the `node_attr` and `edge_attr` named-tuple kwargs of `graphplot`/`graphplot!`.
+
+The edge index mapping assumes `EdgePlot` serialises each edge as `[p1, p2, NaN]`
+(one NaN separator per edge in the internal `Lines` plot), so the conversion is:
+`edge_idx = div(raw_idx - 1, 3) + 1`.
+"""
+function _build_inspector_labels(network_graph::MetaDiGraph)
+    # Capture ordered edge list for O(1) lookup by sequential index
+    _edgelist = collect(edges(network_graph))
+
+    node_fn = (plot, idx, pos) -> begin
+        v = Int(idx)
+        v_props = props(network_graph, v)
+        bus_label = string(get(v_props, :bus_id, v))
+        _format_tooltip_props(v_props; title="Bus $bus_label")
+    end
+
+    edge_fn = (plot, idx, pos) -> begin
+        # EdgePlot lays out each edge as [p1, p2, NaN] in the inner Lines plot,
+        # so raw pick index maps to edge with: edge_idx = div(idx-1, 3) + 1
+        e_idx = clamp(div(Int(idx) - 1, 3) + 1, 1, length(_edgelist))
+        e = _edgelist[e_idx]
+        e_props = props(network_graph, e)
+        # Choose a human-friendly label based on model type
+        if haskey(e_props, :branch_id)
+            tag = get(e_props, :is_transformer, false) ? "Transformer" :
+                  get(e_props, :is_switch,      false) ? "Switch"      : "Branch"
+            id  = get(e_props, :branch_id, e_idx)
+        else
+            tag = get(e_props, :is_switch, false) ? "Switch" : "Line"
+            id  = get(e_props, :line_id, e_idx)
+        end
+        _format_tooltip_props(e_props; title="$tag $id")
+    end
+
+    return node_fn, edge_fn
+end
 
 
 """
@@ -873,6 +967,7 @@ function network_graph_plot(
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
     @debug "The used layout is: $layout"
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
     return graphplot(
         network_graph;
         layout=layout,
@@ -887,6 +982,7 @@ function network_graph_plot(
         node_strokewidth=node_strokewidth,
         show_node_labels=show_node_labels,
         nlabels_fontsize=nlabels_fontsize,
+        node_attr=(; inspector_label=_node_inspector),
 
         #edges
         elabels=elabels,
@@ -895,6 +991,7 @@ function network_graph_plot(
         elabels_color=elabels_color,
         elabels_fontsize=elabels_fontsize,
         tangents=tangents,
+        edge_attr=(; inspector_label=_edge_inspector),
 
         # arrow
         arrow_show=arrow_show,
@@ -944,7 +1041,7 @@ function network_graph_plot!(
     #makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
-
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
     add_graph = graphplot!(
         network_graph;
         layout=layout,
@@ -958,6 +1055,7 @@ function network_graph_plot!(
         node_marker=node_marker,
         node_strokewidth=node_strokewidth,
         show_node_labels=show_node_labels,
+        node_attr=(; inspector_label=_node_inspector),
 
         #edges
         elabels=elabels,
@@ -966,6 +1064,7 @@ function network_graph_plot!(
         elabels_color=elabels_color,
         #elabels_fontsize=elabels_fontsize,
         tangents=tangents,
+        edge_attr=(; inspector_label=_edge_inspector),
 
         # arrow
         arrow_show=arrow_show,
@@ -1019,7 +1118,7 @@ function network_graph_plot!(
     #makie_backend.activate!()
     #labels_theme = default_theme(makie_backend.Scene(), Makie.Text)
     #elabels_fontsize = isnothing(elabels_fontsize) ? labels_theme.fontsize : elabels_fontsize
-
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
     add_graph = graphplot!(
         ax,
         network_graph;
@@ -1034,6 +1133,7 @@ function network_graph_plot!(
         node_marker=node_marker,
         node_strokewidth=node_strokewidth,
         show_node_labels=show_node_labels,
+        node_attr=(; inspector_label=_node_inspector),
 
         #edges
         elabels=elabels,
@@ -1042,6 +1142,7 @@ function network_graph_plot!(
         elabels_color=elabels_color,
         #elabels_fontsize=elabels_fontsize,
         tangents=tangents,
+        edge_attr=(; inspector_label=_edge_inspector),
 
         # arrow
         arrow_show=arrow_show,
@@ -1177,6 +1278,8 @@ function network_graph_map_plot(
 
 
 
+    _node_inspector, _edge_inspector = _build_inspector_labels(network_graph)
+
     graph = graphplot!(
         network_graph;
         layout=GraphLayout,
@@ -1190,6 +1293,7 @@ function network_graph_map_plot(
         node_marker=node_marker,
         node_strokewidth=node_strokewidth,
         show_node_labels=show_node_labels,
+        node_attr=(; inspector_label=_node_inspector),
 
         #edges
         elabels=elabels,
@@ -1198,6 +1302,7 @@ function network_graph_map_plot(
         elabels_color=elabels_color,
         elabels_fontsize=elabels_fontsize,
         tangents=tangents,
+        edge_attr=(; inspector_label=_edge_inspector),
 
         # arrow
         arrow_show=arrow_show,
