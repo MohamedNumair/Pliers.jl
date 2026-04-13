@@ -25,6 +25,7 @@ using PrettyTables
 
 # plotting packages
 using Makie
+_MK = Makie
 # using MakieCore
 using CairoMakie
 using WGLMakie
@@ -1433,7 +1434,7 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
     # Moving results into the ENG dictionary 
     eng = deepcopy(eng)
     pf_sol = results["solution"]
-    is_perunit, vbase_V, sbase_VA, Zbase_Ω, Ibase_A, vbase_ll, Ibase_A_ll, Ibase_A_ϕ  = calc_bases_from_dict(pf_sol)
+    bases_dict = calc_bases_from_dict(pf_sol, return_dict = true)
 
     for (b, bus) in pf_sol["bus"]
         bus["V"] = bus["vm"] .* exp.(im * bus["va"])
@@ -1537,16 +1538,7 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
         eng["load"][load_eng_id]["math_id"] = l
     end
 
-    eng["bases"] = Dict(
-        "is_perunit" => is_perunit,
-        "vbase_V" => vbase_V,
-        "sbase_VA" => sbase_VA,
-        "Zbase_Ω" => Zbase_Ω,
-        "Ibase_A" => Ibase_A,
-        "vbase_ll" => vbase_ll,
-        "Ibase_A_ll" => Ibase_A_ll,
-        "Ibase_A_ϕ" => Ibase_A_ϕ
-    )
+    eng["bases"] = bases_dict
 
     if detailed
         pf_results_buses(pf_sol, math; keep_pu)
