@@ -3801,6 +3801,40 @@ function terminal_line_plot(data::Dict, line_id)
     end
 end
 
+"""
+    get_pfd(math::Dict, PMD::Module; epsilon=0, explicit_neutral=true)
+
+Initialize and return a `PowerFlowData` object for a given mathematical model.
+
+This utility function automates the process of setting up start voltages and 
+transforming a mathematical data dictionary into a structured power flow data object 
+suitable for solvers.
+
+# Arguments
+- `math::Dict`: The mathematical model representation of the power system.
+- `PMD::Module`: The PowerModelsDistribution module (passed to access internal utilities).
+
+# Keywords
+- `epsilon=0`: A small numerical offset used during start voltage initialization 
+  to avoid singularities or zeros in rectangular coordinates.
+- `explicit_neutral=true`: Boolean flag to determine if the neutral conductor 
+  should be explicitly modeled in the voltage initialization.
+
+# Returns
+- `pfd::PowerFlowData`: An initialized PowerFlowData object containing the system state 
+  and network topology.
+
+# Example
+```julia
+pfd = get_pfd(math_model, PowerModelsDistribution; epsilon=1e-6)
+```
+"""
+function get_pfd(math, PMD; epsilon= 1e-6, explicit_neutral=true)
+    PMD.add_start_voltage!(math, coordinates=:rectangular, epsilon=epsilon, explicit_neutral=explicit_neutral)
+    v_start = PMD._bts_to_start_voltage(math)
+    pfd = PMD.PowerFlowData(math, v_start, true)
+    return pfd
+end 
 
 
 
@@ -3843,4 +3877,5 @@ export get_graph_node, get_graph_edge, create_network_graph
 export bus_phasor, bus_phasor!, plot_bus_phasor, calculate_vuf!
 export remove_all_superfluous_buses!, add_degree_to_bus!, reduce_network_intermediate_buses!, reduce_empty_leaf_buses!, reduce_network_buses!
 export fix_eng_directions!
+export get_pfd
 end # module PMDUtils    
