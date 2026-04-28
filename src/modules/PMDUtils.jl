@@ -1429,112 +1429,114 @@ function pf_results(results::Dict{String, Any}, math::Dict{String, Any}, eng::Di
     results_values = [results["termination_status"], results["iterations"], results["time_total"], results["time_build"], results["time_post"], results["time_solve"], results["stationarity"]]
     summary_table = DataFrame(Label = results_headings, Value = results_values)
     pretty_table(summary_table, highlighters=[_highlight_results_status])
-    
-    
-    # Moving results into the ENG dictionary 
+
     eng = deepcopy(eng)
-    pf_sol = results["solution"]
+    pf_sol = haskey(results, "solution") ? results["solution"] : results
     bases_dict = calc_bases_from_dict(pf_sol, return_dict = true)
 
+    # Step 1: dictify the solution (computes terminal-keyed voltage/current/power dicts)
+    dictify_solution!(pf_sol, math)
+
+    # Step 2: map bus results into ENG
     for (b, bus) in pf_sol["bus"]
-        bus["V"] = bus["vm"] .* exp.(im * bus["va"])
-        terminals = math["bus"][b]["terminals"]
-
-        # write a dictionary where the key is the terminal number and the value is the voltage at that terminal
-        bus["V"] = Dict(string(term) => bus["V"][i] for (i, term) in enumerate(terminals))
-
         eng_bus_id = math["bus"][b]["name"]
-
+        V = bus["voltage"]  # set by dictify_solution!
         if eng_bus_id == "_virtual_bus.voltage_source.source"
-            eng["virtual_bus"] = Dict()
-            eng["virtual_bus"]["V"] = bus["V"]
-            eng["virtual_bus"]["math_id"] = b
+            eng["virtual_bus"] = Dict("V" => V, "math_id" => b)
         else
-            eng["bus"][eng_bus_id]["V"] = bus["V"]
+            eng["bus"][eng_bus_id]["V"] = V
             eng["bus"][eng_bus_id]["math_id"] = b
         end
     end
 
+    # Step 3: map branch results into ENG
     for (br, branch) in pf_sol["branch"]
-        len = Int(length(branch["cr"]) / 2)
-        I_t = branch["cr"][1:len] + im * branch["ci"][1:len]
-        I_f = branch["cr"][len+1:end] + im * branch["ci"][len+1:end]
+        f_bus_key = string(math["branch"][br]["f_bus"])
+        t_bus_key = string(math["branch"][br]["t_bus"])
+        Vf = pf_sol["bus"][f_bus_key]["voltage"]
+        Vt = pf_sol["bus"][t_bus_key]["voltage"]
+        f_terms = math["branch"][br]["f_connections"]
+        t_terms = math["branch"][br]["t_connections"]
 
-        branch["I_t"] = Dict(string(term) => I_t[i] for (i, term) in enumerate(math["branch"][br]["t_connections"]))
-        branch["I_f"] = Dict(string(term) => I_f[i] for (i, term) in enumerate(math["branch"][br]["f_connections"]))
+        # Prefer dictified current keys; fall back to concatenated cr/ci (compute_mc_pf IVR format)
+        if haskey(branch, "current_from")
+            I_f = branch["current_from"]
+            I_t = branch["current_to"]
+        elseif haskey(branch, "cr") && haskey(branch, "ci")
+            n   = Int(length(branch["cr"]) / 2)
+            I_f = Dict(string(term) => (branch["cr"][n+i] + im*branch["ci"][n+i]) for (i,term) in enumerate(f_terms))
+            I_t = Dict(string(term) => (branch["cr"][i]   + im*branch["ci"][i])   for (i,term) in enumerate(t_terms))
+        else
+            I_f = Dict{String,ComplexF64}()
+            I_t = Dict{String,ComplexF64}()
+        end
 
-
-        f_bus = string(math["branch"][br]["f_bus"])
-        t_bus = string(math["branch"][br]["t_bus"])
-
-        Vf = pf_sol["bus"][f_bus]["V"]
-        Vt = pf_sol["bus"][t_bus]["V"]
-
-        branch["S_f"] = Dict(string(term) => Vf[string(term)] * conj(branch["I_f"][string(term)]) for (_, term) in enumerate(math["branch"][br]["f_connections"]))
-        branch["S_t"] = Dict(string(term) => Vt[string(term)] * conj(branch["I_t"][string(term)]) for (_, term) in enumerate(math["branch"][br]["t_connections"]))
-
-        branch["S_f"] = Dict(string(term) => Vf[string(term)] * conj(branch["I_f"][string(term)]) for (_, term) in enumerate(math["branch"][br]["f_connections"]))
-        branch["S_t"] = Dict(string(term) => Vt[string(term)] * conj(branch["I_t"][string(term)]) for (_, term) in enumerate(math["branch"][br]["t_connections"]))
+        S_f = Dict(string(term) => Vf[string(term)] * conj(I_f[string(term)]) for term in f_terms)
+        S_t = Dict(string(term) => Vt[string(term)] * conj(I_t[string(term)]) for term in t_terms)
 
         eng_branch_id = math["branch"][br]["name"]
+        branch_data = Dict("I_f" => I_f, "I_t" => I_t, "S_f" => S_f, "S_t" => S_t,
+                           "V_f" => Vf,  "V_t" => Vt,  "math_id" => br)
 
         if eng_branch_id == "_virtual_branch.voltage_source.source"
-            eng["virtual_branch"] = Dict()
-            eng["virtual_branch"]["I_t"] = branch["I_t"]
-            eng["virtual_branch"]["I_f"] = branch["I_f"]
-            eng["virtual_branch"]["S_t"] = branch["S_t"]
-            eng["virtual_branch"]["S_f"] = branch["S_f"]
-            eng["virtual_branch"]["V_f"] = pf_sol["bus"][f_bus]["V"]
-            eng["virtual_branch"]["V_t"] = pf_sol["bus"][t_bus]["V"]   
-            eng["virtual_branch"]["math_id"] = br
+            eng["virtual_branch"] = branch_data
         else
-            eng["line"][eng_branch_id]["I_t"] = branch["I_t"]
-            eng["line"][eng_branch_id]["I_f"] = branch["I_f"]
-            eng["line"][eng_branch_id]["S_t"] = branch["S_t"]
-            eng["line"][eng_branch_id]["S_f"] = branch["S_f"]
-            eng["line"][eng_branch_id]["V_f"] = pf_sol["bus"][f_bus]["V"]
-            eng["line"][eng_branch_id]["V_t"] = pf_sol["bus"][t_bus]["V"]
-            eng["line"][eng_branch_id]["math_id"] = br
+            for (k, v) in branch_data
+                eng["line"][eng_branch_id][k] = v
+            end
         end
     end
 
+    # Step 4: map gen results into ENG
     for (g, gen) in pf_sol["gen"]
-        Ig = gen["crg"] + im * gen["cig"]
-
-        gen["Ig"] = Dict(string(term) => Ig[i] for (i, term) in enumerate(math["gen"][g]["connections"]))
-
-        gen_bus = string(math["gen"][g]["gen_bus"])
-        Vg = pf_sol["bus"][gen_bus]["V"]
-
-        gen["Sg"] = Dict(string(term) => Vg[string(term)] * conj(gen["Ig"][string(term)]) for (i, term) in enumerate(math["gen"][g]["connections"]))
-
         gen_eng_id = math["gen"][g]["name"]
-
-        if gen_eng_id == "_virtual_gen.voltage_source.source"
-            #eng["voltage_source"]["source"] = Dict()
-            eng["voltage_source"]["source"]["I_g"] = gen["Ig"]
-            eng["voltage_source"]["source"]["S_g"] = gen["Sg"]
-            eng["voltage_source"]["source"]["math_id"] = g
+        # Use dictified current if available, else compute from crg/cig
+        if haskey(gen, "current")
+            Ig = gen["current"]
         else
-            eng["voltage_source"][gen_eng_id]["I_g"] = gen["Ig"]
-            eng["voltage_source"][gen_eng_id]["S_g"] = gen["Sg"]
-            eng["voltage_source"][gen_eng_id]["math_id"] = g
+            terms = setdiff(math["gen"][g]["connections"], [4])
+            Ig_arr = gen["crg"] + im * gen["cig"]
+            Ig = Dict(string(term) => Ig_arr[i] for (i, term) in enumerate(terms))
+        end
+
+        gen_bus_key = string(math["gen"][g]["gen_bus"])
+        Vg = pf_sol["bus"][gen_bus_key]["voltage"]
+        Sg = Dict(term => Vg[term] * conj(Ig[term]) for term in keys(Ig))
+
+        gen_data = Dict("I_g" => Ig, "S_g" => Sg, "math_id" => g)
+        if gen_eng_id == "_virtual_gen.voltage_source.source"
+            for (k, v) in gen_data
+                eng["voltage_source"]["source"][k] = v
+            end
+        else
+            for (k, v) in gen_data
+                eng["voltage_source"][gen_eng_id][k] = v
+            end
         end
     end
 
+    # Step 5: map load results into ENG
     for (l, load) in pf_sol["load"]
-        Il = load["crd"] + im * load["cid"]
-
-        load["Il"] = Dict(string(term) => Il[i] for (i, term) in enumerate(math["load"][l]["connections"]))
-
-        load_bus = string(math["load"][l]["load_bus"])
-        Vl = pf_sol["bus"][load_bus]["V"]
-
-        load["Sl"] = Dict(string(term) => Vl[string(term)] * conj(load["Il"][string(term)]) for (i, term) in enumerate(math["load"][l]["connections"]))
-
         load_eng_id = math["load"][l]["name"]
-        eng["load"][load_eng_id]["I_l"] = load["Il"]
-        eng["load"][load_eng_id]["S_l"] = load["Sl"]
+        # Use dictified current if available, else compute from crd/cid
+        if haskey(load, "current")
+            Il = load["current"]
+        else
+            terms = math["load"][l]["connections"]
+            Il_arr = load["crd"] + im * load["cid"]
+            Il = Dict(string(term) => Il_arr[i] for (i, term) in enumerate(terms))
+        end
+
+        if haskey(load, "power")
+            Sl = load["power"]
+        else
+            load_bus_key = string(math["load"][l]["load_bus"])
+            Vl = pf_sol["bus"][load_bus_key]["voltage"]
+            Sl = Dict(term => Vl[term] * conj(Il[term]) for term in keys(Il))
+        end
+
+        eng["load"][load_eng_id]["I_l"] = Il
+        eng["load"][load_eng_id]["S_l"] = Sl
         eng["load"][load_eng_id]["math_id"] = l
     end
 
@@ -2511,6 +2513,89 @@ function dictify_solution!(pf_sol::Dict{String, Any}, math::Dict{String, Any}; f
     solution_dictify_loads!(pf_sol, math; formulation = formulation)
     solution_dictify_branches!(pf_sol, math; formulation = formulation)
     solution_dictify_gens!(pf_sol, math; formulation = formulation)
+end
+
+"""
+    merge_solution_into_math!(pf_sol, math; formulation="IVR")
+
+Dictify the solution (if not already done) and merge all result sub-dictionaries
+directly into the corresponding entries of the MATH model dictionary in-place.
+
+After this call every `math["bus"][b]` will contain the result fields
+(`"voltage"`, `"vm"`, `"va"`, `"V"`) alongside the topological data, and
+similarly for branches, loads, and generators.
+
+# Arguments
+- `pf_sol`: Power-flow / OPF result dictionary (accepts both the raw results dict
+  with a `"solution"` key, or the unwrapped solution dict directly).
+- `math`: MATH model dictionary (modified in-place).
+- `formulation`: Passed through to `dictify_solution!` (default `"IVR"`).
+
+# Returns
+`math` (the same object, modified in-place).
+
+# Example
+```julia
+pf = PMD.compute_mc_pf(math; explicit_neutral=true)
+merge_solution_into_math!(pf, math)
+# now math["bus"]["3"]["voltage"] contains terminal-keyed complex voltages
+```
+"""
+function merge_solution_into_math!(pf_sol::Dict{String,Any}, math::Dict{String,Any};
+                                   formulation::String="IVR")
+    sol = haskey(pf_sol, "solution") ? pf_sol["solution"] : pf_sol
+
+    # Step 1: dictify if the terminal-keyed voltage dict is not yet present
+    _is_dictified = !isempty(sol["bus"]) &&
+                    haskey(first(values(sol["bus"])), "voltage")
+    if !_is_dictified
+        dictify_solution!(sol, math; formulation=formulation)
+    end
+
+    # Step 2: merge bases
+    if haskey(sol, "settings") || haskey(sol, "per_unit")
+        math["bases"] = calc_bases_from_dict(sol, return_dict=true)
+    end
+
+    # Step 3: buses — copy all result fields produced by dictify
+    _bus_result_keys = ("voltage", "V", "vm", "va")
+    for (b, bus) in sol["bus"]
+        haskey(math["bus"], b) || continue
+        for k in _bus_result_keys
+            haskey(bus, k) && (math["bus"][b][k] = bus[k])
+        end
+    end
+
+    # Step 4: branches
+    _branch_result_keys = ("current_from", "current_to",
+                           "power_from",   "power_to",
+                           "shunt_current_from", "shunt_current_to")
+    for (br, branch) in sol["branch"]
+        haskey(math["branch"], br) || continue
+        for k in _branch_result_keys
+            haskey(branch, k) && (math["branch"][br][k] = branch[k])
+        end
+    end
+
+    # Step 5: loads
+    _load_result_keys = ("current", "power", "current_bus", "power_bus")
+    for (l, load) in sol["load"]
+        haskey(math["load"], l) || continue
+        for k in _load_result_keys
+            haskey(load, k) && (math["load"][l][k] = load[k])
+        end
+    end
+
+    # Step 6: generators
+    _gen_result_keys = ("current", "power")
+    for (g, gen) in sol["gen"]
+        haskey(math["gen"], g) || continue
+        for k in _gen_result_keys
+            haskey(gen, k) && (math["gen"][g][k] = gen[k])
+        end
+    end
+
+    return math
 end
 
 """
