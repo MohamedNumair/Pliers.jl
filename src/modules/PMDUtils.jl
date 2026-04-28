@@ -1899,24 +1899,33 @@ function find_path_to_root_math(math::Dict{String,Any})
 end
 
 """
-    find_path_distances_math(math; distance=:length) -> Dict{String, Float64}
+    find_path_distances_math(math; distance=:length, eng=nothing) -> Dict{String, Float64}
 
 Compute the cumulative distance from the root bus to every non-virtual bus.
 
 # Keyword arguments
 - `distance::Symbol`:
-  - `:length`     — sum of `branch["length"]` values in metres.
-  - `:electrical` — sum of mean-diagonal `|Z|` in Ω  
-    (`Z_pu = br_r + j·br_x`, converted via system base impedance `Zbase_Ω`).
+  - `:length`     — cumulative line length in metres [m]. Requires `eng` to be passed
+    because PMD absorbs `length` into `br_r`/`br_x` during ENG→MATH and drops the
+    scalar field. The ENG line is looked up via `branch["name"]`.
+  - `:electrical` — cumulative mean-diagonal `|Z|` in Ω
+    (`Z_pu = br_r + j·br_x`, scaled by system base impedance `Zbase_Ω`).
+- `eng`: ENG model dictionary. Required when `distance = :length`.
 """
-function find_path_distances_math(math::Dict{String,Any}; distance::Symbol=:length)
+function find_path_distances_math(math::Dict{String,Any};
+                                   distance::Symbol=:length,
+                                   eng::Union{Dict{String,Any},Nothing}=nothing)
     distance ∈ (:length, :electrical) ||
         error("distance must be :length or :electrical, got :$distance")
+    if distance == :length && isnothing(eng)
+        error("eng must be provided for distance=:length — PMD does not preserve the " *
+              "scalar length field in MATH branches. Pass the ENG model as eng=eng.")
+    end
     paths = find_path_to_root_math(math)
     if distance == :electrical
         # System-level base impedance: exact for single-zone feeders;
         # reasonable approximation for multi-zone networks.
-        @debug "I use a single Zbase_Ω for the whole network, calculated from the first voltage base and power base in math['settings']"
+        @debug "Using a single Zbase_Ω for the whole network from math['settings']"
         _, vbase_V, sbase_VA, Zbase_Ω, _, _, _, _ = calc_bases_from_dict(math; return_dict=false)
     end
     dists = Dict{String, Float64}()
@@ -1925,7 +1934,9 @@ function find_path_distances_math(math::Dict{String,Any}; distance::Symbol=:leng
         for br in path
             branch = math["branch"][br]
             if distance == :length
-                d += get(branch, "length", 0.0)
+                # branch["name"] is the ENG line key
+                eng_line_id = branch["name"]
+                d += eng["line"][eng_line_id]["length"]
             else  # :electrical
                 br_r = branch["br_r"]
                 br_x = branch["br_x"]
@@ -1960,7 +1971,7 @@ function _distance_voltage_array_math(math_res, distances, phase_idx::Int)
 end
 
 """
-    plot_voltage_profile_math(math_res; size=(800,1000), phase=nothing, distance=:length)
+    plot_voltage_profile_math(math_res; size=(800,1000), phase=nothing, distance=:length, eng=nothing)
 
 Plot voltage magnitude profiles using the MATHEMATICAL model result dictionary.
 
@@ -1970,28 +1981,30 @@ Plot voltage magnitude profiles using the MATHEMATICAL model result dictionary.
 - `phase`:           Terminal index to plot — `1`=a, `2`=b, `3`=c, `4`=n.
                      Pass `nothing` (default) to plot all present phases.
 - `distance::Symbol`: X-axis distance metric:
-  - `:length`     — cumulative line length in metres [m].
+  - `:length`     — cumulative line length in metres [m]. Requires `eng` keyword.
   - `:electrical` — cumulative mean-diagonal impedance magnitude in Ohms [Ω].
+- `eng`: ENG model dictionary. **Required** when `distance = :length` because PMD
+  does not preserve the scalar line length in MATH branches.
 
 # Returns
 `Figure` — the Makie figure.
 
 # Example
 ```julia
-math_res = PMD.solve_mc_pf(math, ...)["solution"]
-# after merging vm/va into math["bus"]...
 plot_voltage_profile_math(math; distance=:electrical)
+plot_voltage_profile_math(math; distance=:length, eng=eng)
 ```
 """
 function plot_voltage_profile_math(math_res::Dict{String,Any};
                                     size=(800, 1000),
                                     phase=nothing,
-                                    distance::Symbol=:length)
+                                    distance::Symbol=:length,
+                                    eng::Union{Dict{String,Any},Nothing}=nothing)
     distance ∈ (:length, :electrical) ||
         error("distance must be :length or :electrical, got :$distance")
 
     @info "Computing distances (distance = :$distance) for MATH model"
-    distances = find_path_distances_math(math_res; distance=distance)
+    distances = find_path_distances_math(math_res; distance=distance, eng=eng)
 
     xlabel_str  = distance == :length ? "Distance (m)" : "Electrical Distance (Ω)"
     colors      = [:red, :green, :blue, :black]
