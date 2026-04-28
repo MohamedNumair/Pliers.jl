@@ -101,4 +101,47 @@ include("modules/PMDUtils.jl")
 include("modules/PMDGraph.jl")
 include("modules/PMDSEUtils.jl")
 
+# ── Banner ────────────────────────────────────────────────────────────────────
+
+const _BANNER_ART = [
+    "░█████████  ░██         ░██████░██████████ ░█████████    ░██████   ",
+    "░██     ░██ ░██           ░██  ░██         ░██     ░██  ░██   ░██  ",
+    "░██     ░██ ░██           ░██  ░██         ░██     ░██ ░██         ",
+    "░█████████  ░██           ░██  ░█████████  ░█████████   ░████████  ",
+    "░██         ░██           ░██  ░██         ░██   ░██           ░██ ",
+    "░██         ░██           ░██  ░██         ░██    ░██   ░██   ░██  ",
+    "░██         ░██████████ ░██████░██████████ ░██     ░██   ░██████   ",
+]
+const _BANNER_WIDTH = 68  # visual column width of the art above
+
+function _print_banner()
+    cols = try displaysize(stdout)[2] catch; 80 end
+
+    orange = _CRN.Crayon(foreground = (255, 140, 0), bold = true)
+    dimmed = _CRN.Crayon(foreground = (160, 160, 160))
+    bold_w = _CRN.Crayon(foreground = :white, bold = true)
+
+    subtitle = "Power Distribution Analysis Tools \n Brought to you by Mohamed Numair (mnumair.com)"
+    version  = try "v" * string(pkgversion(@__MODULE__)) catch; "" end
+
+    if cols >= _BANNER_WIDTH
+        println()
+        for line in _BANNER_ART
+            println(orange(line))
+        end
+        sub_pad = max(0, (_BANNER_WIDTH - length(subtitle)) ÷ 2)
+        println(dimmed(" "^sub_pad * subtitle))
+        ver_pad = max(0, (_BANNER_WIDTH - length(version)) ÷ 2)
+        println(dimmed(" "^ver_pad * version))
+        println()
+    else
+        # Compact single-line fallback for narrow terminals
+        println(bold_w("\nPLIERS.jl") * dimmed(" — $subtitle ($version)\n"))
+    end
+end
+
+function __init__()
+    _print_banner()
+end
+
 end # module Pliers
