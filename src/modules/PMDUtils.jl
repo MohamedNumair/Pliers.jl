@@ -1721,7 +1721,7 @@ function find_parent_line(eng, bus_id)
     end
 end
 
-
+ 
 # then a function that finds the parent bus of a line
 function find_parent_bus(eng, line_id)
     return eng["line"][line_id]["f_bus"]
@@ -1832,6 +1832,196 @@ function plot_voltage_profile(eng_res; size = (800, 1000), phase = nothing)
         ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)]) of the network"
         ax.xlabel = "Distance (m)"
         ax.ylabel = "Voltage (V)"
+    end
+
+    return f
+end
+
+
+## MATH MODEL VOLTAGE PROFILE
+
+# Helper predicates for virtual components in the MATH model
+_is_virtual_bus_name(name::String)    = contains(name, "_virtual")
+_is_virtual_branch_name(name::String) = contains(name, "_virtual")
+
+"""
+    find_parent_branch_math(math, bus_idx::Int) -> Union{String, Nothing}
+
+Return the string key of the non-virtual branch whose `t_bus` equals `bus_idx`,
+or `nothing` if the bus is a root (no upstream branch).
+"""
+function find_parent_branch_math(math::Dict{String,Any}, bus_idx::Int)
+    for (br, branch) in math["branch"]
+        haskey(branch, "name") && _is_virtual_branch_name(branch["name"]) && continue
+        branch["t_bus"] == bus_idx && return br
+    end
+    return nothing
+end
+
+"""
+    find_root_bus_math(math) -> String
+
+Return the string key of the root bus in the MATH model: the first non-virtual bus
+that has no non-virtual upstream branch.
+"""
+function find_root_bus_math(math::Dict{String,Any})
+    for (b, bus) in math["bus"]
+        haskey(bus, "name") && _is_virtual_bus_name(bus["name"]) && continue
+        isnothing(find_parent_branch_math(math, bus["index"])) && return b
+    end
+    error("Could not locate root bus in MATH model.")
+end
+
+"""
+    find_path_to_root_math(math) -> Dict{String, Vector{String}}
+
+Return a dictionary mapping each non-virtual bus string key to the ordered list of
+branch string keys on the path back to the root bus.
+"""
+function find_path_to_root_math(math::Dict{String,Any})
+    root_key = find_root_bus_math(math)
+    root_idx = math["bus"][root_key]["index"]
+    paths = Dict{String, Vector{String}}()
+    for (b, bus) in math["bus"]
+        haskey(bus, "name") && _is_virtual_bus_name(bus["name"]) && continue
+        paths[b] = String[]
+        papa_idx = bus["index"]
+        while papa_idx != root_idx
+            br_key = find_parent_branch_math(math, papa_idx)
+            isnothing(br_key) && break   # disconnected — stop traversal
+            push!(paths[b], br_key)
+            papa_idx = math["branch"][br_key]["f_bus"]
+        end
+    end
+    return paths
+end
+
+"""
+    find_path_distances_math(math; distance=:length) -> Dict{String, Float64}
+
+Compute the cumulative distance from the root bus to every non-virtual bus.
+
+# Keyword arguments
+- `distance::Symbol`:
+  - `:length`     — sum of `branch["length"]` values in metres.
+  - `:electrical` — sum of mean-diagonal `|Z|` in Ω  
+    (`Z_pu = br_r + j·br_x`, converted via system base impedance `Zbase_Ω`).
+"""
+function find_path_distances_math(math::Dict{String,Any}; distance::Symbol=:length)
+    distance ∈ (:length, :electrical) ||
+        error("distance must be :length or :electrical, got :$distance")
+    paths = find_path_to_root_math(math)
+    if distance == :electrical
+        # System-level base impedance: exact for single-zone feeders;
+        # reasonable approximation for multi-zone networks.
+        @debug "I use a single Zbase_Ω for the whole network, calculated from the first voltage base and power base in math['settings']"
+        _, vbase_V, sbase_VA, Zbase_Ω, _, _, _, _ = calc_bases_from_dict(math; return_dict=false)
+    end
+    dists = Dict{String, Float64}()
+    for (b, path) in paths
+        d = 0.0
+        for br in path
+            branch = math["branch"][br]
+            if distance == :length
+                d += get(branch, "length", 0.0)
+            else  # :electrical
+                br_r = branch["br_r"]
+                br_x = branch["br_x"]
+                n     = size(br_r, 1)
+                r_avg = tr(br_r) / n
+                x_avg = tr(br_x) / n
+                d += sqrt(r_avg^2 + x_avg^2) * Zbase_Ω
+            end
+        end
+        dists[b] = d
+    end
+    return dists
+end
+
+# Build scatter data arrays for one terminal/phase index from the MATH model.
+# Voltages are returned in per-unit (as stored in math["bus"][b]["vm"]).
+function _distance_voltage_array_math(math_res, distances, phase_idx::Int)
+    bus_labels    = String[]
+    x_distances   = Float64[]
+    y_voltages_pu = Float64[]
+    for (b, bus) in math_res["bus"]
+        haskey(bus, "name") && _is_virtual_bus_name(bus["name"]) && continue
+        !haskey(bus, "vm")    && continue
+        !haskey(distances, b) && continue
+        pos = findfirst(==(phase_idx), bus["terminals"])
+        isnothing(pos) && continue
+        push!(bus_labels,    b)
+        push!(x_distances,   distances[b])
+        push!(y_voltages_pu, bus["vm"][pos])
+    end
+    return bus_labels, x_distances, y_voltages_pu
+end
+
+"""
+    plot_voltage_profile_math(math_res; size=(800,1000), phase=nothing, distance=:length)
+
+Plot voltage magnitude profiles using the MATHEMATICAL model result dictionary.
+
+# Arguments
+- `math_res::Dict{String,Any}`: MATH model dictionary with solved voltage fields (`vm`/`va`).
+- `size`:            Figure size in pixels (default `(800, 1000)`).
+- `phase`:           Terminal index to plot — `1`=a, `2`=b, `3`=c, `4`=n.
+                     Pass `nothing` (default) to plot all present phases.
+- `distance::Symbol`: X-axis distance metric:
+  - `:length`     — cumulative line length in metres [m].
+  - `:electrical` — cumulative mean-diagonal impedance magnitude in Ohms [Ω].
+
+# Returns
+`Figure` — the Makie figure.
+
+# Example
+```julia
+math_res = PMD.solve_mc_pf(math, ...)["solution"]
+# after merging vm/va into math["bus"]...
+plot_voltage_profile_math(math; distance=:electrical)
+```
+"""
+function plot_voltage_profile_math(math_res::Dict{String,Any};
+                                    size=(800, 1000),
+                                    phase=nothing,
+                                    distance::Symbol=:length)
+    distance ∈ (:length, :electrical) ||
+        error("distance must be :length or :electrical, got :$distance")
+
+    @info "Computing distances (distance = :$distance) for MATH model"
+    distances = find_path_distances_math(math_res; distance=distance)
+
+    xlabel_str  = distance == :length ? "Distance (m)" : "Electrical Distance (Ω)"
+    colors      = [:red, :green, :blue, :black]
+    phase_names = Dict(1 => "a", 2 => "b", 3 => "c", 4 => "n")
+
+    f = Figure(size=size)
+
+    if isnothing(phase)
+        axs = Axis[]
+        for i in 1:4
+            bus_labels, x_dist, y_vm_pu = _distance_voltage_array_math(math_res, distances, i)
+            isempty(bus_labels) && continue
+            ax = Axis(f[length(axs) + 1, 1])
+            scatter!(ax, x_dist, y_vm_pu, color=colors[i])
+            ax.title  = "Phase $(phase_names[i]) of the network"
+            ax.xlabel = xlabel_str
+            ax.ylabel = "Voltage (p.u.)"
+            push!(axs, ax)
+        end
+        length(axs) > 1 && (linkxaxes!(axs...); linkyaxes!(axs...))
+    else
+        phase isa Int || error("phase must be an Integer (1–4), got $(typeof(phase))")
+        bus_labels, x_dist, y_vm_pu = _distance_voltage_array_math(math_res, distances, phase)
+        if isempty(bus_labels)
+            @warn "No buses found for phase $(get(phase_names, phase, string(phase)))"
+            return f
+        end
+        ax = Axis(f[1, 1])
+        scatter!(ax, x_dist, y_vm_pu, color=colors[phase])
+        ax.title  = "Phase $(get(phase_names, phase, string(phase))) of the network"
+        ax.xlabel = xlabel_str
+        ax.ylabel = "Voltage (p.u.)"
     end
 
     return f
@@ -3835,8 +4025,6 @@ function get_pfd(math, PMD; epsilon= 1e-6, explicit_neutral=true)
     pfd = PMD.PowerFlowData(math, v_start, true)
     return pfd
 end 
-
-
 
 
 #=
