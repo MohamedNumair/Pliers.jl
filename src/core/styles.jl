@@ -85,7 +85,7 @@ end
     
 
 # PrettyTables Highlighting
-highlight_row_label = PrettyTables.TextHighlighter(
+    highlight_row_label = PrettyTables.TextHighlighter(
     (data, i, j) -> j == 1,
     crayon"bold"
 )
