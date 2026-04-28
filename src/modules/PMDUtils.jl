@@ -2271,8 +2271,8 @@ function solution_dictify_branches!(pf_sol::Dict{String, Any}, math::Dict{String
         t_terminals = math["branch"][b]["t_connections"]
         # write a dictionary where the key is the terminal number and the value is the current at that terminal
         branch = pf_sol["branch"][b]
-        branch["power_from"] = Dict(string(term) => branch["pf"][i] + branch["qf"][i]*im for (i, term) in enumerate(f_terminals))
-        branch["power_to"] = Dict(string(term) => branch["pt"][i] + branch["qt"][i]*im for (i, term) in enumerate(t_terminals))
+        haskey(branch, "pf") ? branch["power_from"] = Dict(string(term) => branch["pf"][i] + branch["qf"][i]*im for (i, term) in enumerate(f_terminals)) : nothing
+        haskey(branch, "pt") ? branch["power_to"] = Dict(string(term) => branch["pt"][i] + branch["qt"][i]*im for (i, term) in enumerate(t_terminals)) : nothing
         #TODO: I can make it check the branch f_bus and t_bus and get their voltages and then calcualte the currents from the powers.
 
         haskey(branch, "csr_to") ? branch["shunt_current_to"] = Dict(string(term) => branch["csr_to"][i] + branch["csi_to"][i]*im for (i, term) in enumerate(t_terminals)) : nothing
@@ -2719,7 +2719,7 @@ function plot_symmetrical_components(bus_dict::Dict{String, Any};     makie_back
     bus_phasor!(ax, eng, bus_id)
 
     return f, ax
-
+    
 end
 
 """
