@@ -1815,14 +1815,14 @@ function plot_voltage_profile(eng_res; size = (800, 1000), phase = nothing)
             end
             scatter!(ax, x_distances_m, y_voltages_V, color = color)
             ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(i)]) of the network"
-            ax.xlabel = "Distance (m)"
+            ax.xlabel = "Distance [m]"
             ax.ylabel = "Voltage (V)"    
             push!(axs, ax)
         end
         linkxaxes!(axs...)
         pop!(axs)
         display(axs)
-        linkyaxes!(axs...)
+        #linkyaxes!(axs...) # because y might be different ranges
     else
         ax = Axis(f[1,1])
         bus_labels, x_distances_m, y_voltages_V = distance_voltage_array(eng_res, Distances, string(phase))
@@ -1832,7 +1832,7 @@ function plot_voltage_profile(eng_res; size = (800, 1000), phase = nothing)
         end
         scatter!(ax, x_distances_m, y_voltages_V, color = colors[phase])
         ax.title = "Phase $( Dict("1" => "a", "2" => "b", "3" => "c", "4" => "n")[string(phase)]) of the network"
-        ax.xlabel = "Distance (m)"
+        ax.xlabel = "Distance [m]"
         ax.ylabel = "Voltage (V)"
     end
 
@@ -2005,9 +2005,11 @@ function plot_voltage_profile_math(math_res::Dict{String,Any};
 
     @info "Computing distances (distance = :$distance) for MATH model"
     distances = find_path_distances_math(math_res; distance=distance, eng=eng)
+    @debug "Distances computed for $(length(distances)) buses. Sample: $(first(distances))"
 
-    xlabel_str  = distance == :length ? "Distance (m)" : "Electrical Distance (Ω)"
-    colors      = [:red, :green, :blue, :black]
+    xlabel_str  = distance == :length ? "Distance [m]" : "Electrical Distance [Ω]"
+    unit_str    = distance == :length ? "m" : "Ω"
+    colors      = [:darkred, :darkgreen, :darkblue, :black]
     phase_names = Dict(1 => "a", 2 => "b", 3 => "c", 4 => "n")
 
     f = Figure(size=size)
@@ -2016,15 +2018,21 @@ function plot_voltage_profile_math(math_res::Dict{String,Any};
         axs = Axis[]
         for i in 1:4
             bus_labels, x_dist, y_vm_pu = _distance_voltage_array_math(math_res, distances, i)
-            isempty(bus_labels) && continue
+            @debug "Phase $(get(phase_names, i, string(i))): Found $(length(bus_labels)) buses with voltage data"
+            isempty(bus_labels) && @warn "No buses found for phase $(get(phase_names, phase, string(i))))"
             ax = Axis(f[length(axs) + 1, 1])
-            scatter!(ax, x_dist, y_vm_pu, color=colors[i])
+            let lbls = bus_labels, xs = x_dist, ys = y_vm_pu, u = unit_str
+                scatter!(ax, xs, ys, color=colors[i],
+                    inspector_label = (plt, idx, pos) ->
+                        "Bus: $(lbls[idx])\nDistance: $(round(xs[idx]; digits=2)) [$u]\nVoltage: $(round(ys[idx]; digits=4)) [pu]")
+            end
             ax.title  = "Phase $(phase_names[i]) of the network"
             ax.xlabel = xlabel_str
-            ax.ylabel = "Voltage (p.u.)"
+            ax.ylabel = "Voltage [p.u.]"
             push!(axs, ax)
         end
-        length(axs) > 1 && (linkxaxes!(axs...); linkyaxes!(axs...))
+        @info "Linking x-axes of all subplots"
+        length(axs) > 1 && (linkxaxes!(axs...)) # ; linkyaxes!(axs...))
     else
         phase isa Int || error("phase must be an Integer (1–4), got $(typeof(phase))")
         bus_labels, x_dist, y_vm_pu = _distance_voltage_array_math(math_res, distances, phase)
@@ -2033,10 +2041,14 @@ function plot_voltage_profile_math(math_res::Dict{String,Any};
             return f
         end
         ax = Axis(f[1, 1])
-        scatter!(ax, x_dist, y_vm_pu, color=colors[phase])
+        let lbls = bus_labels, xs = x_dist, ys = y_vm_pu, u = unit_str
+            scatter!(ax, xs, ys, color=colors[phase],
+                inspector_label = (plt, idx, pos) ->
+                    "Bus: $(lbls[idx])\nDistance: $(round(xs[idx]; digits=2)) [$u]\nVoltage: $(round(ys[idx]; digits=4)) [pu]")
+        end
         ax.title  = "Phase $(get(phase_names, phase, string(phase))) of the network"
         ax.xlabel = xlabel_str
-        ax.ylabel = "Voltage (p.u.)"
+        ax.ylabel = "Voltage [p.u.]"
     end
 
     return f
