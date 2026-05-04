@@ -843,12 +843,24 @@ end
 
 Format a MetaDiGraph property dictionary into a human-readable multi-line string
 suitable for display in a `DataInspector` tooltip. Skips plot decoration keys.
+Properties whose symbol name starts with `meas_` are grouped at the bottom under
+a dedicated `── Measurements ──` section so they do not get buried in bus data.
 """
 function _format_tooltip_props(p::Dict; title="Properties")
-    lines = String["─── $title ───"]
+    lines      = String["─── $title ───"]
+    meas_lines = String[]
     for k in sort(collect(keys(p)), by=string)
         k in _TOOLTIP_DECORATION_KEYS && continue
-        push!(lines, "  $k: $(_tooltip_value_str(p[k]))")
+        line = "  $k: $(_tooltip_value_str(p[k]))"
+        if startswith(string(k), "meas_")
+            push!(meas_lines, line)
+        else
+            push!(lines, line)
+        end
+    end
+    if !isempty(meas_lines)
+        push!(lines, "  ─── Measurements ───")
+        append!(lines, meas_lines)
     end
     return join(lines, "\n")
 end
@@ -892,9 +904,19 @@ function _build_inspector_labels(network_graph::MetaDiGraph, pmd_data=nothing)
             end
             println()
         end
-        # 2. Full property dict (no truncation)
+        # 2. Bus properties (non-measurement)
         display(Dict(string(k) => v for (k, v) in v_props
-                     if k ∉ _TOOLTIP_DECORATION_KEYS))
+                     if k ∉ _TOOLTIP_DECORATION_KEYS && !startswith(string(k), "meas_")))
+        # 3. Measurements block (if any)
+        meas_entries = sort(
+            [(string(k), v) for (k, v) in v_props if startswith(string(k), "meas_")],
+            by = x -> x[1])
+        if !isempty(meas_entries)
+            println("─── Measurements ───")
+            for (k, v) in meas_entries
+                println("  $k => $v")
+            end
+        end
         println("═"^60)
 
         # ── Tooltip string (truncated, for the floating overlay) ──────────────

@@ -17,9 +17,12 @@ using ..Pliers: warning_text, header, extra_keys
 using ..Pliers.PMDUtils: dictify_solution!, add_vmn_p_q
 using ..Pliers.PMDGraph: Graphs, MetaGraphs, create_network_graph, smart_layout,
     network_graph_plot, _decorate_nodes!, _decorate_edges!
+using Graphs: vertices, nv, edges
+using MetaGraphs: get_prop, props, set_prop!
 
 # plotting packages
 using ..Pliers: Makie, CairoMakie, WGLMakie
+using Makie: Point2f, poly!, PolyElement, Legend, Colorbar, scatter!
 
 # pretty terminal packages
 using Crayons
@@ -62,7 +65,7 @@ end
 
 
 #TODO: fix it to not only show 3 columns but extend the res array,, also note math has maybe all things u need?!
-function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE_N = nothing, APEs_df = nothing)#pm_form = PowerModelsDistribution.IVRENPowerModel)
+function viz_residuals(SE_en, math_en; detailed = true, show_legend = false, mape = nothing, mape_vmn = nothing, APEs_df = nothing)#pm_form = PowerModelsDistribution.IVRENPowerModel)
 
     se_sol_en = SE_en["solution"]
     solve_time = SE_en["solve_time"]
@@ -76,8 +79,8 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
     isapprox(objective, 0, atol = 0.05) ? printstyled(" objective : $(objective) \n", color=:green) : printstyled(" objective : $(objective) \n", color=:red)
     string(termination_status) == "LOCALLY_SOLVED" ? printstyled(" termination : $(termination_status) \n", color=:green) : printstyled(" termination : $(termination_status) \n", color=:red)
     string(primal_status) == "FEASIBLE_POINT" ? printstyled(" primal : $(primal_status) \n", color=:green) : printstyled(" primal : $(primal_status) \n", color=:red)
-    !isnothing(mape) ? isapprox(mape, 0, atol=0.05)  ? printstyled(" MAPE : $(mape) \n", color=:green) : printstyled(" MAPE : $(mape) \n", color=:red) : nothing
-    !isnothing(MAPE_N) ? isapprox(MAPE_N, 0, atol=0.05)  ? printstyled(" MAPE_N : $(MAPE_N) \n", color=:green) : printstyled(" MAPE_N : $(MAPE_N) \n", color=:red) : nothing
+    !isnothing(mape)     ? (isapprox(mape,     0, atol=0.05) ? printstyled(" MAPE_Vg  (phase-to-gnd) : $(round(mape,     digits=4)) %\n", color=:green) : printstyled(" MAPE_Vg  (phase-to-gnd) : $(round(mape,     digits=4)) %\n", color=:red)) : nothing
+    !isnothing(mape_vmn) ? (isapprox(mape_vmn, 0, atol=0.05) ? printstyled(" MAPE_Vmn (phase-to-ntr) : $(round(mape_vmn, digits=4)) %\n", color=:green) : printstyled(" MAPE_Vmn (phase-to-ntr) : $(round(mape_vmn, digits=4)) %\n", color=:red)) : nothing
     
     m,n, dof = get_m_n_dof(math_en)
     printstyled(" m : $(m) \n", color=:green)
@@ -90,116 +93,227 @@ function viz_residuals(SE_en, math_en; show_legend = false, mape = nothing, MAPE
     #     PowerModelsDistributionStateEstimation.build_mc_se;
     # ).model)
 
-    if !isapprox(mape, 0, atol=0.05)
-        if !isnothing(APEs_df)
-            println("APEs_df:")
-            display(APEs_df)
+        if detailed
+        # Merge residuals with meas
+        for (m, meas) in se_sol_en["meas"]
+            math_en["meas"][m]["res"] = meas["res"]
+        end
+
+        # Extracting values into a DataFrame for visualization
+        rows = String[]
+        res1 = Float64[]
+        res2 = Float64[]
+        res3 = Float64[]
+        res4 = Float64[]
+
+        for (key, value) in math_en["meas"]
+            cmp = value["cmp"]
+            cmp_id = value["cmp_id"]
+            var = value["var"]
+            name = math_en[string(cmp)][string(cmp_id)]["name"]
+            row_name = "$(cmp)_$(cmp_id)_$(var)"
+            push!(rows, row_name)
+            res_values = value["res"]
+            push!(res1, get(res_values, 1, NaN))
+            push!(res2, get(res_values, 2, NaN))
+            push!(res3, get(res_values, 3, NaN))
+            push!(res4, get(res_values, 4, NaN))
+        end
+
+        df_meas_res = DataFrame(Meas = rows, Res1 = res1, Res2 = res2, Res3 = res3, Res4 = res4)
+        sort!(df_meas_res, :Meas)
+
+        # Handle empty collections for minimum and maximum calculations
+        non_nan_res1 = filter(!isnan, df_meas_res.Res1)
+        non_nan_res2 = filter(!isnan, df_meas_res.Res2)
+        non_nan_res3 = filter(!isnan, df_meas_res.Res3)
+        non_nan_res4 = filter(!isnan, df_meas_res.Res4)
+
+        min_val = minimum(vcat(non_nan_res1, non_nan_res2, non_nan_res3, non_nan_res4))
+        max_val = maximum(vcat(non_nan_res1, non_nan_res2, non_nan_res3, non_nan_res4))
+
+        # Define color intervals
+        num_intervals = 6
+        lowerBounds = [[min_val + i * (0.01 - min_val) / 3 for i in 0:3]..., 1e-1, 1]
+        uppoerBounds = [[0.00333332833981672 + i * (0.1 - 0.00333332833981672) / 3 for i in 0:3]..., 1, max_val + 1e-6]
+
+        colors = [crayon"green bold", crayon"cyan bold", crayon"blue bold", crayon"magenta bold", crayon"yellow bold", crayon"red bold"]
+
+        # Create highlighters for each interval
+        highlighters = TextHighlighter[]
+        for i in 1:num_intervals
+            lower_bound = lowerBounds[i]
+            upper_bound = uppoerBounds[i]
+            push!(highlighters, TextHighlighter(
+                (data, row, col) -> col in 2:5 && data[row, col] >= lower_bound && data[row, col] < upper_bound,
+                colors[i]
+            ))
+        end
+        hideNan_hl = TextHighlighter(       
+            (data, i, j) -> (j ∈ collect(2:5) && isnan(data[i, j])),
+            crayon"dark_gray conceal"
+        )
+        push!(highlighters, hideNan_hl)
+
+        # Define headers
+        header_names = ["Meas", "Res1", "Res2", "Res3", "Res4"]
+        try
+            res_heatmap = pretty_table(df_meas_res; column_labels=header_names, highlighters=highlighters)
+        catch
+            display(df_meas_res)
+        end
+        df_legend = DataFrame(
+            Lower_Bound = lowerBounds,
+            Upper_Bound = uppoerBounds,
+        )
+
+        legend_highlighters = TextHighlighter[]
+        for i in 1:num_intervals
+            push!(legend_highlighters, TextHighlighter(
+                (data, row, col) -> (row == i),
+                colors[i]
+            ))
+        end
+        if show_legend
+            println("Legend:") 
+            legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=legend_highlighters)
+            println(legend)
         end
     end
 
-    # Merge residuals with meas
-    for (m, meas) in se_sol_en["meas"]
-        math_en["meas"][m]["res"] = meas["res"]
-    end
-
-    # Extracting values into a DataFrame for visualization
-    rows = String[]
-    res1 = Float64[]
-    res2 = Float64[]
-    res3 = Float64[]
-    res4 = Float64[]
-
-    for (key, value) in math_en["meas"]
-        cmp = value["cmp"]
-        cmp_id = value["cmp_id"]
-        var = value["var"]
-        name = math_en[string(cmp)][string(cmp_id)]["name"]
-        row_name = "$(cmp)_$(cmp_id)_$(var)"
-        push!(rows, row_name)
-        res_values = value["res"]
-        push!(res1, get(res_values, 1, NaN))
-        push!(res2, get(res_values, 2, NaN))
-        push!(res3, get(res_values, 3, NaN))
-        push!(res4, get(res_values, 4, NaN))
-    end
-
-    df_meas_res = DataFrame(Meas = rows, Res1 = res1, Res2 = res2, Res3 = res3, Res4 = res4)
-    sort!(df_meas_res, :Meas)
-
-    # Handle empty collections for minimum and maximum calculations
-    non_nan_res1 = filter(!isnan, df_meas_res.Res1)
-    non_nan_res2 = filter(!isnan, df_meas_res.Res2)
-    non_nan_res3 = filter(!isnan, df_meas_res.Res3)
-    non_nan_res4 = filter(!isnan, df_meas_res.Res4)
-
-    min_val = minimum(vcat(non_nan_res1, non_nan_res2, non_nan_res3, non_nan_res4))
-    max_val = maximum(vcat(non_nan_res1, non_nan_res2, non_nan_res3, non_nan_res4))
-
-    # Define color intervals
-    num_intervals = 6
-    lowerBounds = [[min_val + i * (0.01 - min_val) / 3 for i in 0:3]..., 1e-1, 1]
-    uppoerBounds = [[0.00333332833981672 + i * (0.1 - 0.00333332833981672) / 3 for i in 0:3]..., 1, max_val + 1e-6]
-
-    colors = [crayon"green bold", crayon"cyan bold", crayon"blue bold", crayon"magenta bold", crayon"yellow bold", crayon"red bold"]
-
-    # Create highlighters for each interval
-    highlighters = TextHighlighter[]
-    for i in 1:num_intervals
-        lower_bound = lowerBounds[i]
-        upper_bound = uppoerBounds[i]
-        push!(highlighters, TextHighlighter(
-            (data, row, col) -> col in 2:5 && data[row, col] >= lower_bound && data[row, col] < upper_bound,
-            colors[i]
-        ))
-    end
-    hideNan_hl = TextHighlighter(       
-        (data, i, j) -> (j ∈ collect(2:5) && isnan(data[i, j])),
-        crayon"dark_gray conceal"
-    )
-    push!(highlighters, hideNan_hl)
-
-    # Define headers
-    header = ["Meas", "Res1", "Res2", "Res3", "Res4"]
-    try
-        res_heatmap = pretty_table(df_meas_res; column_labels=header, highlighters=highlighters)
-    catch
-        display(df_meas_res)
-    end
-    df_legend = DataFrame(
-        Lower_Bound = lowerBounds,
-        Upper_Bound = uppoerBounds,
-    )
-
-    legend_highlighters = TextHighlighter[]
-    for i in 1:num_intervals
-        push!(legend_highlighters, TextHighlighter(
-            (data, row, col) -> (row == i),
-            colors[i]
-        ))
-    end
-    if show_legend
-        println("Legend:") 
-        legend = pretty_table(df_legend, header=["Lower Bound", "Upper Bound"], header_crayon=crayon"fg:yellow", highlighters=legend_highlighters)
-        println(legend)
-    end
-
-
-    return solve_time, objective, termination_status, primal_status, mape, m, n, dof
+    return solve_time, objective, termination_status, primal_status, mape, mape_vmn, m, n, dof
 
 end
 
-function viz_residuals(SE_en, math_en, PF_en; show_legend=false, kwargs...)
+function viz_residuals(SE_en, math_en, PF_en; detailed=true, show_legend=false, kwargs...)
 
-    MAPE, APEs_df, _ = _calculate_MAPE(SE_en, PF_en, math_en)
-    MAPE_N, _ , _ = _calculate_MAPE_toNeutral(SE_en, PF_en, math_en)
-    viz_residuals(SE_en, math_en; show_legend = show_legend, mape = MAPE, APEs_df = APEs_df, MAPE_N=MAPE_N, kwargs...)
+    mape     = _calculate_MAPE(SE_en, PF_en, math_en)
+    mape_vmn = _calculate_MAPE_vmn(SE_en, PF_en, math_en)
+    viz_residuals(SE_en, math_en; detailed = detailed, show_legend = show_legend, mape = mape, mape_vmn = mape_vmn, kwargs...)
 
 end
 
+"""
+    _get_bus_voltages(sol_dict, math) → Dict{String, Dict{String, ComplexF64}}
 
+Extract bus voltage phasors keyed by bus_id → terminal_string → complex voltage.
+Handles both raw `solution` dicts and pre-dictified solution dicts.
+"""
+function _get_bus_voltages(sol_dict::Dict{String,Any}, math::Dict{String,Any})
+    buses = haskey(sol_dict, "bus") ? sol_dict["bus"] : sol_dict["solution"]["bus"]
+    result = Dict{String, Dict{String, ComplexF64}}()
+    for (b, bus_data) in buses
+        if haskey(bus_data, "voltage")
+            result[b] = Dict{String, ComplexF64}(
+                string(k) => ComplexF64(v) for (k, v) in bus_data["voltage"]
+            )
+        elseif haskey(bus_data, "vr") && haskey(bus_data, "vi")
+            # raw vr/vi arrays — terminals inferred from math
+            terms = math["bus"][b]["terminals"]
+            vr = bus_data["vr"]
+            vi = bus_data["vi"]
+            volt_dict = Dict{String, ComplexF64}()
+            for (i, t) in enumerate(terms)
+                if i <= length(vr)
+                    volt_dict[string(t)] = ComplexF64(vr[i], vi[i])
+                end
+            end
+            result[b] = volt_dict
+        end
+    end
+    return result
+end
+
+"""
+    _calculate_MAPE(se_sol, pf_sol, math) → Float64
+
+Mean Absolute Percentage Error for **phase-to-ground** (phase-to-zero-reference)
+voltage magnitudes, phases 1–3 only. Terminal 4 (neutral) is excluded from
+the comparison set so that EN and KRN results are directly comparable.
+
+    MAPE_Vg = mean over all (bus, phase) of ||V_SE| - |V_PF|| / |V_PF| × 100 %
+
+For the phase-to-neutral analogue see `_calculate_MAPE_vmn`.
+
+Both `se_sol` and `pf_sol` accept either a raw result dict (with a `"solution"`
+key) or a pre-dictified solution dict.
+"""
+function _calculate_MAPE(
+    se_sol::Dict{String,Any},
+    pf_sol::Dict{String,Any},
+    math::Dict{String,Any},
+)::Float64
+
+    se_voltages = _get_bus_voltages(se_sol, math)
+    pf_voltages = _get_bus_voltages(pf_sol, math)
+
+    apes = Float64[]
+    for (b, se_volts) in se_voltages
+        haskey(pf_voltages, b) || continue
+        pf_volts = pf_voltages[b]
+        for phase in ("1", "2", "3")
+            (haskey(se_volts, phase) && haskey(pf_volts, phase)) || continue
+            Vse = abs(se_volts[phase])
+            Vpf = abs(pf_volts[phase])
+            Vpf == 0.0 && continue
+            push!(apes, abs(Vse - Vpf) / Vpf * 100.0)
+        end
+    end
+    isempty(apes) && return NaN
+    return mean(filter(!isnan, apes))
+end
+
+"""
+    _calculate_MAPE_vmn(se_sol, pf_sol, math) → Float64
+
+Mean Absolute Percentage Error for **phase-to-neutral** voltage magnitudes,
+phases 1–3 only (terminal 4 excluded from the comparison set).
+
+    MAPE_Vmn = mean over all (bus, phase) of ||V_SE_mn| - |V_PF_mn|| / |V_PF_mn| × 100 %
+
+where ``V_{mn} = V_{\\text{phase}} - V_{\\text{neutral}}``.
+
+Neutral reference handling:
+  - **EN models** (terminal `"4"` present in bus voltage dict): `V_neutral = V["4"]`
+  - **KRN models** (terminal `"4"` absent): `V_neutral = 0 + 0im`
+    (neutral is the network reference node; V_phase already equals V_phase-to-neutral)
+
+This convention means KRN SE results are correctly compared against EN PF
+ground truth: the neutral displacement `|V_4_pf|` is subtracted from the PF
+phasors before the APE is computed, so only the estimation error contributes.
+
+Both `se_sol` and `pf_sol` accept either a raw result dict (with a `"solution"`
+key) or a pre-dictified solution dict.
+"""
+function _calculate_MAPE_vmn(
+    se_sol::Dict{String,Any},
+    pf_sol::Dict{String,Any},
+    math::Dict{String,Any},
+)::Float64
+
+    se_voltages = _get_bus_voltages(se_sol, math)
+    pf_voltages = _get_bus_voltages(pf_sol, math)
+
+    apes = Float64[]
+    for (b, se_volts) in se_voltages
+        haskey(pf_voltages, b) || continue
+        pf_volts = pf_voltages[b]
+        # Neutral voltage: 0+0im when absent (Kron: neutral is reference = 0)
+        V4_se = get(se_volts, "4", ComplexF64(0))
+        V4_pf = get(pf_volts, "4", ComplexF64(0))
+        for phase in ("1", "2", "3")
+            (haskey(se_volts, phase) && haskey(pf_volts, phase)) || continue
+            Vse_mn = abs(se_volts[phase] - V4_se)
+            Vpf_mn = abs(pf_volts[phase] - V4_pf)
+            Vpf_mn == 0.0 && continue
+            push!(apes, abs(Vse_mn - Vpf_mn) / Vpf_mn * 100.0)
+        end
+    end
+    isempty(apes) && return NaN
+    return mean(filter(!isnan, apes))
+end
 
 function df_meas_res(SE_en, math_en)
-
     se_sol_en = SE_en["solution"]
         
     printstyled(" %%%%%%%%%%%%%%%%%% STATS %%%%%%%%%%%%%%%%%% \n", color=:blue, underline = true)
@@ -391,200 +505,6 @@ function add_pd_qd_vmn!(SE_RES::Dict{String, Any}, math::Dict{String, Any})
     end
 end  
 
-
-
-"""
-    _calculate_MAPE(SE_RES, PF_RES, math)
-
-Calculate the Mean Absolute Percentage Error (MAPE) between state estimation (SE) results 
-and power flow (PF) results.
-
-# Arguments
-- `SE_RES::Dict`: A dictionary containing the state estimation results.
-- `PF_RES::Dict`: A dictionary containing the power flow results.
-- `math`: A mathematical utility or context used for processing the solutions.
-
-# Returns
-- `mean_APE::Float64`: The mean absolute percentage error across all buses and terminals.
-- `APEs::Vector{Float64}`: A vector containing the absolute percentage errors for each bus and terminal.
-
-# Details
-The function compares the voltage solutions from the state estimation (`SE_RES`) and 
-power flow (`PF_RES`) results. It calculates the absolute percentage error (APE) for 
-each bus and terminal, filters out any `NaN` values, and computes the mean APE.
-
-# Notes
-- The function assumes that the solutions in `SE_RES` and `PF_RES` are structured as 
-  dictionaries with nested keys for buses and their respective voltages.
-- The `dictify_solution!` function is used to process the solutions before comparison.
-"""
-function _calculate_MAPE(SE_RES, PF_RES, math)
-
-    se_sol  = deepcopy(SE_RES["solution"])
-    pf_sol = deepcopy(PF_RES["solution"])
-
-    dictify_solution!(pf_sol, math)
-    dictify_solution!(se_sol, math)
-
-    APEs = [] 
-    Errors = [] 
-
-    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
-    APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
-    for (b,bus) in se_sol["bus"]
-
-        for (term,Vse) in bus["voltage"] 
-            if term == "4"
-                continue
-            end
-            # println("Bus    :",b)
-            # println("Term   :",term)
-            # println("Vse   :",Vse)
-            # println("Vpf     :", pf_sol["bus"][b]["voltage"][term])
-
-
-            #haskey(bus["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-            #haskey(pf_sol["bus"][b]["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-            Vpf = pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-            #Vpf = haskey(pf_sol["bus"][b]["voltage"], "4")  ?  pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]   : pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-            #Vse = haskey(bus["voltage"] , "4") ? Vse - bus["voltage"]["4"] : Vse
-            # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
-            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
-            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
-            APE = (abs.(Vse .- Vpf) ./ abs.(Vpf) ) * 100
-            Error = Vse - Vpf
-            push!(APEs,APE)
-            push!(Errors,Error)
-
-
-            push!(APEs_df, (b, term, APE))
-            push!(Errors_df, (b, term, Error))
-
-        end
-
-    end
-    
-    APEs_nonan = filter(x -> !isnan(x), APEs)
-    mean_APE = mean(APEs_nonan)
-    return mean_APE, APEs_df, Errors_df
-
-end
-
-function _calculate_MAPE_toNeutral(SE_RES, PF_RES, math)
-
-    se_sol  = deepcopy(SE_RES["solution"])
-    pf_sol = deepcopy(PF_RES["solution"])
-
-    dictify_solution!(pf_sol, math)
-    dictify_solution!(se_sol, math)
-
-    APEs = [] 
-    Errors = [] 
-
-    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
-    APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
-    for (b,bus) in se_sol["bus"]
-
-        for (term,Vse) in bus["voltage"] 
-            if term == "4"
-                continue
-            end
-            # println("Bus    :",b)
-            # println("Term   :",term)
-            # println("Vse   :",Vse)
-            # println("Vpf     :", pf_sol["bus"][b]["voltage"][term])
-
-
-            #haskey(bus["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-            #haskey(pf_sol["bus"][b]["voltage"], "4") ? nothing : bus["voltage"]["4"] = 0.0 + 0.0im # add a dummy voltage for the 4th terminal if it doesn't exist
-
-            #Vpf = pf_sol["bus"][b]["voltage"][term] 
-            Vpf = haskey(pf_sol["bus"][b]["voltage"], "4")  ?  pf_sol["bus"][b]["voltage"][term] -  pf_sol["bus"][b]["voltage"]["4"]   : pf_sol["bus"][b]["voltage"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-            Vse = haskey(bus["voltage"] , "4") ? Vse - bus["voltage"]["4"] : Vse
-            # APE = abs.(Vpf) == 0 ? 0 : abs.( Vse - Vpf ) ./ abs.(Vpf) * 100
-            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
-            #APE = abs.(abs.( Vse) .- abs.(Vpf)) ./ abs.(Vpf)* 100
-            APE = (abs.(Vse .- Vpf) ./ abs.(Vpf) ) * 100
-            Error = Vse - Vpf
-            push!(APEs,APE)
-            push!(Errors,Error)
-
-
-            push!(APEs_df, (b, term, APE))
-            push!(Errors_df, (b, term, Error))
-
-        end
-
-    end
-    
-    APEs_nonan = filter(x -> !isnan(x), APEs)
-    mean_APE = mean(APEs_nonan)
-    return mean_APE, APEs_df, Errors_df
-
-end
-
-function _calculate_MAPE_P_Q(SE_RES, PF_RES, math; element = "load", quantity = "power")
-
-    se_sol  = deepcopy(SE_RES["solution"])
-    pf_sol = deepcopy(PF_RES["solution"])
-
-    dictify_solution!(pf_sol, math)
-    dictify_solution!(se_sol, math)
-
-    P_APEs = [] 
-    Q_APEs = []
-    Errors = [] 
-
-    Errors_df = DataFrame(Bus = String[], Terminal = String[], Error = ComplexF64[])
-    P_APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
-    Q_APEs_df = DataFrame(Bus = String[], Terminal = String[], APE = Float64[])
-    for (b,Component) in se_sol[element]
-
-        for (term,Sse) in Component[quantity] 
-            if term == "4"
-                continue
-            end
-
-            Spf = pf_sol[element][b][quantity*"_bus"][term] # subtract the dummy voltage for the 4th terminal if it doesn't exist
-
-            Ppf = real(Spf)
-            Qpf = imag(Spf)
-
-            Pse = real(Sse)
-            Qse = imag(Sse)
-
-            P_APE = (abs(abs(Pse) - abs(Ppf)) / abs(Ppf) ) * 100
-            if P_APE > 100
-                warning_text("High P_APE detected at Bus: $b, Terminal: $term, Pse: $Pse, Ppf: $Ppf, Sse: $Sse, Spf: $Spf")
-            end
-            Q_APE = (abs(abs(Qse) - abs(Qpf)) / abs(Qpf) ) * 100
-
-            Error = Sse - Spf
-            
-            push!(P_APEs,P_APE)
-            push!(Q_APEs,Q_APE)
-
-            push!(Errors,Error)
-
-
-            push!(P_APEs_df, (b, term, P_APE))
-            push!(Q_APEs_df, (b, term, Q_APE))
-            push!(Errors_df, (b, term, Error))
-
-        end
-
-    end
-
-    P_APEs_nonan = filter(x -> !isnan(x), P_APEs)
-    Q_APEs_nonan = filter(x -> !isnan(x), Q_APEs)
-    
-    mean_P_APE = mean(P_APEs_nonan)
-    mean_Q_APE = mean(Q_APEs_nonan)
-
-
-    return mean_P_APE, P_APEs_df, mean_Q_APE, Q_APEs_df, Errors_df
-
-end
 
 
 """
@@ -780,7 +700,7 @@ function _base_network_plot(math, network_graph;
     makie_backend=WGLMakie,
     node_color_override=nothing,
     node_size_override=nothing,
-    )
+    kwargs...)
 
     nlabels = show_node_labels ? [string(props(network_graph, i)[:bus_id]) for i in 1:nv(network_graph)] : nothing
 
@@ -974,7 +894,7 @@ and color is mapped via a continuous colormap.
 - `aggregation::Symbol=:max`: How to aggregate residuals per bus (`:max`, `:mean`, `:sum`)
 - `show_node_labels::Bool=false`: Show bus ID labels
 - `show_legend::Bool=true`: Show colorbar
-- `colormap=:RdYlGn_r`: Colormap for bubble coloring
+- `colormap=Makie.Reverse(:RdYlGn)`: Colormap for bubble coloring
 - `makie_backend`: Makie backend (default: `WGLMakie`)
 - `figure_size::Tuple=(1000, 1200)`: Figure dimensions
 
@@ -996,7 +916,7 @@ function plot_residuals_bubbles(SE_en, math;
     show_node_labels::Bool=false,
     show_edge_labels::Bool=false,
     show_legend::Bool=true,
-    colormap=:RdYlGn_r,
+    colormap=Makie.Reverse(:RdYlGn),
     makie_backend=WGLMakie,
     figure_size=(1000, 1200),
     kwargs...)
@@ -1081,7 +1001,7 @@ are shown in translucent gray.
 - `aggregation::Symbol=:max`: How to aggregate residuals per bus (`:max`, `:mean`, `:sum`)
 - `show_node_labels::Bool=false`: Show bus ID labels
 - `show_legend::Bool=true`: Show colorbar
-- `colormap=:RdYlGn_r`: Colormap for node coloring
+- `colormap=Makie.Reverse(:RdYlGn)`: Colormap for node coloring
 - `node_size::Int=15`: Size of nodes that have measurements
 - `makie_backend`: Makie backend (default: `WGLMakie`)
 - `figure_size::Tuple=(1000, 1200)`: Figure dimensions
@@ -1102,7 +1022,7 @@ function plot_residuals_heatmap(SE_en, math;
     show_node_labels::Bool=false,
     show_edge_labels::Bool=false,
     show_legend::Bool=true,
-    colormap=:RdYlGn_r,
+    colormap=Makie.Reverse(:RdYlGn),
     node_size::Int=15,
     makie_backend=WGLMakie,
     figure_size=(1000, 1200),
@@ -1164,6 +1084,228 @@ function plot_residuals_heatmap(SE_en, math;
 end
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Measurement Overlay Visualization on Network Graph
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Classify each measurement variable into a semantic group
+const _VAR_GROUP = Dict{Symbol, Symbol}(
+    :vmn => :voltage, :vm  => :voltage, :vr  => :voltage, :vi  => :voltage,
+    :vll => :voltage, :w   => :voltage,
+    :pd  => :power,   :qd  => :power,   :pg  => :power,   :qg  => :power,
+    :ptot => :power,  :qtot => :power, :pd_bus => :power, :qd_bus => :power,
+    :crd => :current, :cid => :current, :crg => :current, :cig => :current,
+    :crd_bus => :current, :cid_bus => :current,
+)
+
+"""
+Node color based on which measurement groups (V / P-Q / I) are present at bus.
+
+| Color       | Groups present           |
+|-------------|--------------------------|
+| deepskyblue | voltage only             |
+| forestgreen | power only               |
+| crimson     | current only             |
+| darkorchid  | voltage + power          |
+| teal        | voltage + current        |
+| saddlebrown | power + current          |
+| gold        | voltage + power + current|
+"""
+function _coverage_color(groups::Set{Symbol})
+    has_v = :voltage ∈ groups
+    has_p = :power   ∈ groups
+    has_i = :current ∈ groups
+    has_v && has_p && has_i && return :gold
+    has_v && has_p            && return :darkorchid
+    has_v && has_i            && return :teal
+    has_p && has_i            && return :saddlebrown
+    has_v                     && return :deepskyblue
+    has_p                     && return :forestgreen
+    has_i                     && return :crimson
+    return :gray
+end
+
+function _coverage_label(groups::Set{Symbol})
+    parts = String[]
+    :voltage ∈ groups && push!(parts, "V")
+    :power   ∈ groups && push!(parts, "P/Q")
+    :current ∈ groups && push!(parts, "I")
+    return isempty(parts) ? "other" : join(parts, "+")
+end
+
+"""Resolve which bus a measurement is attached to (returns bus_id string or nothing)."""
+function _meas_bus_id(meas::Dict, math::Dict)
+    cmp    = meas["cmp"]
+    cmp_id = string(meas["cmp_id"])
+    cmp == :bus  && return cmp_id
+    cmp == :load && return string(math["load"][cmp_id]["load_bus"])
+    cmp == :gen  && return string(math["gen"][cmp_id]["gen_bus"])
+    return nothing
+end
+
+"""Compact single-line description of one measurement (fits tooltip line ≤60 chars)."""
+function _meas_compact_str(meas_id::String, meas::Dict)
+    var_str = string(meas["var"])
+    cmp_str = "$(meas["cmp"])[$(meas["cmp_id"])]"
+    dsts    = meas["dst"]
+    dst_str = try
+        μs = [round(d.μ, digits=4) for d in dsts]
+        σ1 = round(dsts[1].σ, digits=4)
+        length(dsts) == 1 ? "μ=$(μs[1]) σ=$σ1" : "μ=$(μs) σ=$σ1"
+    catch
+        join(string.(dsts), " | ")
+    end
+    res_str = (haskey(meas, "res") && !isnothing(meas["res"])) ?
+        " res=$(round.(meas["res"], digits=3))" : ""
+    return "[$meas_id] $var_str@$cmp_str  $dst_str$res_str"
+end
+
+
+"""
+    plot_measurements(math; kwargs...)
+
+Overlay measurement indicators from `math["meas"]` directly on the network
+topology graph.  Each bus that carries at least one measurement is re-drawn
+with a **hexagon** marker (meter symbol) whose color encodes which measurement
+groups are present:
+
+| Color        | Coverage              |
+|--------------|-----------------------|
+| deepskyblue  | V only                |
+| forestgreen  | P/Q only              |
+| crimson      | I only                |
+| darkorchid   | V + P/Q               |
+| teal         | V + I                 |
+| saddlebrown  | P/Q + I               |
+| gold         | V + P/Q + I           |
+
+Hovering over a measured node shows a DataInspector tooltip with one compact
+line per measurement, and simultaneously prints the full measurement details
+to the terminal.
+
+# Arguments
+- `math`: MATH-format dict with a `"meas"` key.
+
+# Keyword Arguments
+- `use_coords::Bool=false`: geographic coordinate layout
+- `layout`: graph layout function (default: `smart_layout`)
+- `meter_size::Int=22`: marker size for measured nodes (px)
+- `show_node_labels::Bool=false`: show bus ID labels
+- `show_edge_labels::Bool=false`: show edge labels
+- `show_legend::Bool=true`: add coverage legend
+- `makie_backend`: Makie backend (default: `WGLMakie`)
+- `figure_size::Tuple=(1000,1200)`: figure dimensions
+
+# Returns
+`(Figure, Axis, GraphPlot)`
+"""
+function plot_measurements(math;
+    use_coords::Bool=false,
+    layout=smart_layout,
+    meter_size::Int=22,
+    show_node_labels::Bool=false,
+    show_edge_labels::Bool=false,
+    show_legend::Bool=true,
+    makie_backend=WGLMakie,
+    figure_size=(1000, 1200),
+    kwargs...)
+
+    haskey(math, "meas") || error("No `meas` key in math dict")
+
+    # Build graph
+    if use_coords
+        network_graph, coord_layout, _ = create_network_graph(math, layout)
+        actual_layout = coord_layout
+    else
+        network_graph, _, _ = create_network_graph(math, layout)
+        actual_layout = layout
+    end
+
+    # Collect measurements per bus (sorted by meas id)
+    bus_meas = Dict{String, Vector{Tuple{String,Dict}}}()
+    for (meas_id, meas) in sort(collect(math["meas"]),
+            by = x -> something(tryparse(Int, x[1]), typemax(Int)))
+        bus_id = _meas_bus_id(meas, math)
+        isnothing(bus_id) && continue
+        push!(get!(bus_meas, bus_id, Tuple{String,Dict}[]), (meas_id, meas))
+    end
+
+    # Apply default decoration, then override for measured buses
+    _decorate_nodes!(network_graph, math)
+    _decorate_edges!(network_graph, math)
+
+    seen_coverages = Dict{String, Symbol}()  # coverage_label → color (for legend)
+
+    for v in vertices(network_graph)
+        bus_id = string(get_prop(network_graph, v, :bus_id))
+        !haskey(bus_meas, bus_id) && continue
+
+        meass  = bus_meas[bus_id]
+        groups = Set{Symbol}(get(_VAR_GROUP, meas["var"], :unknown) for (_, meas) in meass)
+        color  = _coverage_color(groups)
+        label  = _coverage_label(groups)
+        seen_coverages[label] = color
+
+        # Override visual properties
+        vp = network_graph.vprops[v]
+        vp[:node_color]  = color
+        vp[:node_marker] = :hexagon
+        vp[:marker_size] = meter_size
+
+        # Store measurement summaries as vertex properties for DataInspector
+        vp[:meas_coverage] = label
+        vp[:meas_count]    = length(meass)
+        for (meas_id, meas) in meass
+            vp[Symbol("meas_$meas_id")] = _meas_compact_str(meas_id, meas)
+        end
+    end
+
+    # Extract per-node/edge arrays from the now-decorated graph
+    node_color   = [get_prop(network_graph, i, :node_color)  for i in 1:nv(network_graph)]
+    node_marker  = [get_prop(network_graph, i, :node_marker) for i in 1:nv(network_graph)]
+    node_size    = [get_prop(network_graph, i, :marker_size) for i in 1:nv(network_graph)]
+    edge_color   = [get_prop(network_graph, e, :edge_color)   for e in edges(network_graph)]
+    arrow_marker = [get_prop(network_graph, e, :arrow_marker) for e in edges(network_graph)]
+    arrow_size   = [get_prop(network_graph, e, :arrow_size)   for e in edges(network_graph)]
+    arrow_shift  = [get_prop(network_graph, e, :arrow_shift)  for e in edges(network_graph)]
+
+    nlabels = show_node_labels ?
+        [string(get_prop(network_graph, i, :bus_id)) for i in 1:nv(network_graph)] : nothing
+
+    # Plot via network_graph_plot — DataInspector is activated inside via
+    # _build_inspector_labels, which reads all vertex props (incl. meas_*) for tooltip
+    fig, ax, gp = network_graph_plot(
+        network_graph;
+        layout=actual_layout,
+        figure_size=figure_size,
+        makie_backend=makie_backend,
+        show_node_labels=show_node_labels,
+        nlabels=nlabels,
+        show_edge_labels=show_edge_labels,
+        node_color=node_color,
+        node_marker=node_marker,
+        node_size=node_size,
+        edge_color=edge_color,
+        arrow_show=true,
+        arrow_marker=arrow_marker,
+        arrow_size=arrow_size,
+        arrow_shift=arrow_shift,
+        _pmd_data=math,
+        kwargs...)
+
+    # Coverage legend
+    if show_legend && !isempty(seen_coverages)
+        sorted = sort(collect(seen_coverages), by=x -> x[1])
+        Legend(fig[1, 2],
+            [PolyElement(color=c, strokecolor=:black, strokewidth=0.5) for (_, c) in sorted],
+            [lbl for (lbl, _) in sorted],
+            "Measurements")
+    end
+
+    return fig, ax, gp
+end
+
+
 # Re-export PMDSE utility functions from parent module
 export viz_residuals
 export df_meas_res
@@ -1172,6 +1314,7 @@ export write_sm_measurements
 export plot_residuals_bars
 export plot_residuals_bubbles
 export plot_residuals_heatmap
+export plot_measurements
 
 
 
@@ -1182,5 +1325,3 @@ export plot_residuals_heatmap
 
 
 end # module PMDSEUtils
-
-
