@@ -2729,7 +2729,7 @@ function write_delta_readings(pf_sol, math, math_meas)
     # end 
 
     for (l, load) in math["load"]
-        if load["configuration"] == DELTA
+        if string(load["configuration"]) == "DELTA"
             pf_sol["load"][l]["ptot"] = [sum(pf_sol["load"][l]["pd"])]
             pf_sol["load"][l]["qtot"] = [sum(pf_sol["load"][l]["qd"])]
 
