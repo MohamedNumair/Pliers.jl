@@ -136,7 +136,8 @@ function _print_banner()
         println()
     else
         # Compact single-line fallback for narrow terminals
-        println(bold_w("\nPLIERS.jl") * dimmed(" — $subtitle ($version)\n"))
+        print(bold_w("\nPLIERS.jl"))
+        println(dimmed(" — $subtitle ($version)\n"))
     end
 end
 
